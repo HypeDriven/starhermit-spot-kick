@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#070d1d" />
+<title>Spot Kick</title>
+<link rel="stylesheet" href="./css/style.css" />
+<script src="./js/three.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas" aria-hidden="true"></canvas>
+
+  <!-- WebGL compatibility message -->
+  <div id="compat-message" class="hidden" role="alert">
+    <h2>3D unavailable</h2>
+    <p>Your browser could not create a WebGL context. Spot Kick needs WebGL for its
+    stadium view. Your session and settings are preserved — try a browser with
+    hardware acceleration enabled.</p>
+  </div>
+
+  <!-- Top status bar (safe-area aware) -->
+  <header id="status-bar" class="hidden">
+    <span id="sb-mode">Spot Kick</span>
+    <span id="sb-score" aria-live="polite">0 – 0</span>
+    <span id="sb-clock"></span>
+  </header>
+
+  <!-- Loading -->
+  <section id="screen-loading" class="screen" aria-label="Loading">
+    <h2>Spot Kick</h2>
+    <p id="loading-status">Warming up the floodlights…</p>
+  </section>
+
+  <!-- Title / home -->
+  <section id="screen-title" class="screen hidden" aria-labelledby="title-heading">
+    <h1 id="title-heading" class="title-name">SPOT KICK</h1>
+    <p class="subtitle">Penalty shootout duel under the floodlights</p>
+    <nav class="menu-buttons" aria-label="Main menu">
+      <button type="button" id="btn-play" data-action="play">Play</button>
+      <button type="button" data-action="daily">Daily Challenge</button>
+      <button type="button" data-action="journey">Journey <span id="journey-progress" class="pill"></span></button>
+      <button type="button" data-action="practice">Practice</button>
+      <button type="button" data-action="challenge">Challenge</button>
+      <button type="button" data-action="learn">Learn</button>
+      <button type="button" data-action="hosted">Hosted Play</button>
+      <button type="button" data-action="help">Help</button>
+      <button type="button" data-action="settings">Settings</button>
+    </nav>
+    <p id="title-profile" class="dim"></p>
+  </section>
+
+  <!-- Mode setup -->
+  <section id="screen-setup" class="screen hidden" aria-labelledby="setup-title">
+    <h2 id="setup-title">Setup</h2>
+    <p id="setup-rules" class="dim"></p>
+    <div id="setup-body"></div>
+    <div class="row">
+      <button type="button" id="btn-start-match" data-action="start-match">Start Match</button>
+      <button type="button" data-action="back-to-menu">Back</button>
+    </div>
+  </section>
+
+  <!-- Play HUD (semantic layer over the canvas) -->
+  <section id="screen-play" class="screen play hidden" aria-label="Match play">
+    <div id="hud-top">
+      <p id="hud-objective"></p>
+      <p id="hud-phase" aria-live="polite"></p>
+      <div id="hud-kicks" aria-label="Kick progress"></div>
+    </div>
+
+    <div id="hud-controls">
+      <div id="panel-shoot" class="hidden" role="group" aria-label="Shot controls">
+        <p class="panel-label">Aim: tap a goal zone, choose curve, confirm.</p>
+        <div class="seg" role="radiogroup" aria-label="Curve">
+          <button type="button" data-curve="left" role="radio" aria-checked="false">Curve ↰</button>
+          <button type="button" data-curve="none" role="radio" aria-checked="true" class="on">Straight</button>
+          <button type="button" data-curve="right" role="radio" aria-checked="false">Curve ↱</button>
+        </div>
+        <p id="shoot-selection" class="dim">No zone selected</p>
+        <button type="button" id="btn-confirm-shot" data-action="confirm-shot" disabled>Kick!</button>
+      </div>
+
+      <div id="panel-dive" class="hidden" role="group" aria-label="Keeper controls">
+        <p class="panel-label">Read the shot: pick a zone and dive timing.</p>
+        <div class="seg" role="radiogroup" aria-label="Dive timing">
+          <button type="button" data-timing="early" role="radio" aria-checked="false">Early</button>
+          <button type="button" data-timing="on" role="radio" aria-checked="true" class="on">On time</button>
+          <button type="button" data-timing="late" role="radio" aria-checked="false">Late</button>
+        </div>
+        <p id="dive-selection" class="dim">No zone selected</p>
+        <button type="button" id="btn-confirm-dive" data-action="confirm-dive" disabled>Dive!</button>
+      </div>
+
+      <div id="panel-wait" class="hidden"><p id="wait-text">Waiting…</p></div>
+
+      <div id="hud-actions">
+        <button type="button" data-action="pause" aria-label="Pause">❚❚</button>
+        <button type="button" data-action="skip" aria-label="Skip animation">⏭</button>
+        <button type="button" data-action="undo" id="btn-undo" class="hidden">Undo</button>
+        <button type="button" data-action="camera-reset" aria-label="Reset camera">⌂</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pause / settings -->
+  <section id="overlay-pause" class="overlay hidden" aria-labelledby="pause-heading">
+    <h2 id="pause-heading">Paused</h2>
+    <button type="button" data-action="resume">Resume</button>
+
+    <div class="settings-grid">
+      <fieldset>
+        <legend>Audio</legend>
+        <label>Music <input type="range" id="opt-music" min="0" max="100" value="60" /><output for="opt-music"></output></label>
+        <label>Effects <input type="range" id="opt-sfx" min="0" max="100" value="80" /><output for="opt-sfx"></output></label>
+        <label>Ambience <input type="range" id="opt-ambience" min="0" max="100" value="50" /><output for="opt-ambience"></output></label>
+        <label>Voice cues <input type="range" id="opt-voice" min="0" max="100" value="80" /><output for="opt-voice"></output></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Graphics</legend>
+        <label>Quality
+          <select id="opt-quality">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high" selected>High</option>
+          </select>
+        </label>
+        <label>Theme <select id="opt-theme"></select></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Accessibility</legend>
+        <label><input type="checkbox" id="opt-reduced-motion" /> Reduced motion</label>
+        <label><input type="checkbox" id="opt-high-contrast" /> High contrast</label>
+        <label><input type="checkbox" id="opt-large-text" /> Larger text</label>
+        <label><input type="checkbox" id="opt-left-handed" /> Left-handed controls</label>
+        <label><input type="checkbox" id="opt-timing-assist" /> Timing assistance</label>
+        <label><input type="checkbox" id="opt-haptics-off" /> Haptics off</label>
+        <label><input type="checkbox" id="opt-captions" checked /> Captions</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Match</legend>
+        <button type="button" data-action="help">How to play</button>
+        <button type="button" data-action="replay-tutorial">Replay tutorial</button>
+        <button type="button" data-action="leave">Leave match</button>
+      </fieldset>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="screen-results" class="screen hidden" aria-labelledby="results-headline">
+    <h2 id="results-headline"></h2>
+    <div id="results-body"></div>
+    <div id="results-achievements"></div>
+    <p id="results-next" class="dim"></p>
+    <div class="row">
+      <button type="button" data-action="replay">Replay</button>
+      <button type="button" id="btn-next-match" data-action="next-match">Next</button>
+      <button type="button" data-action="back-to-menu">Menu</button>
+    </div>
+  </section>
+
+  <!-- Help -->
+  <section id="overlay-help" class="overlay hidden" aria-labelledby="help-heading">
+    <h2 id="help-heading">How to play</h2>
+    <div id="help-body"></div>
+    <button type="button" data-action="close-help">Close</button>
+  </section>
+
+  <!-- Captions + live regions -->
+  <p id="captions" class="hidden" aria-hidden="true"></p>
+  <div id="live-region" class="visually-hidden" aria-live="polite" role="status"></div>
+  <div id="alert-region" class="visually-hidden" aria-live="assertive" role="alert"></div>
+</div>
+
+<script src="./js/rules.js"></script>
+<script src="./js/content.js"></script>
+<script src="./js/session.js"></script>
+<script src="./js/audio.js"></script>
+<script src="./js/render.js"></script>
+<script src="./js/platform.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/bootstrap.js"></script>
+</body>
+</html>

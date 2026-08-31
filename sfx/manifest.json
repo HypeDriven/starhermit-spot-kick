@@ -1,0 +1,92 @@
+[
+  {
+    "name": "ui-confirm",
+    "seconds": 1,
+    "prompt": "Short bright UI confirmation click, a clean fingertip tap on a wooden button with a soft high snap",
+    "event": "ui-confirm"
+  },
+  {
+    "name": "ui-back",
+    "seconds": 1,
+    "prompt": "Soft low UI back click, a dull wooden tap with a slightly descending tone",
+    "event": "ui-back"
+  },
+  {
+    "name": "ui-focus",
+    "seconds": 1,
+    "prompt": "Very short faint UI focus tick, a gentle fingernail tap on a plastic key",
+    "event": "ui-focus"
+  },
+  {
+    "name": "invalid",
+    "seconds": 1,
+    "prompt": "Short low error buzz, a dull double buzzer tone signalling a rejected action",
+    "event": "invalid"
+  },
+  {
+    "name": "dive-committed",
+    "seconds": 1,
+    "prompt": "Quick whoosh of a goalkeeper diving sideways, fabric and gloves cutting through air with a soft snap",
+    "event": "dive-committed"
+  },
+  {
+    "name": "kick",
+    "seconds": 1,
+    "prompt": "Powerful soccer boot striking a leather football, deep thump with a sharp leather snap",
+    "event": "kick"
+  },
+  {
+    "name": "goal",
+    "seconds": 2,
+    "prompt": "Football ripping into the back of the goal net with a swish, followed by a roaring stadium crowd cheer",
+    "event": "goal"
+  },
+  {
+    "name": "save",
+    "seconds": 2,
+    "prompt": "Goalkeeper gloves slapping a football away with a sharp padded impact, followed by a short crowd gasp",
+    "event": "save"
+  },
+  {
+    "name": "offtarget",
+    "seconds": 2,
+    "prompt": "Football thudding into the advertising boards behind the goal, followed by a disappointed crowd groan",
+    "event": "offtarget"
+  },
+  {
+    "name": "whistle-start",
+    "seconds": 1,
+    "prompt": "Single sharp referee whistle blast, crisp pea whistle at full volume",
+    "event": "whistle-start"
+  },
+  {
+    "name": "whistle-end",
+    "seconds": 2,
+    "prompt": "Referee whistle signalling full time, one long blast followed by two short blasts",
+    "event": "whistle-end"
+  },
+  {
+    "name": "win",
+    "seconds": 3,
+    "prompt": "Stadium crowd erupting in celebration, sustained cheers and applause with a rising swell",
+    "event": "win"
+  },
+  {
+    "name": "lose",
+    "seconds": 2,
+    "prompt": "Disappointed stadium crowd, a low collective sigh fading into sparse quiet applause",
+    "event": "lose"
+  },
+  {
+    "name": "achievement",
+    "seconds": 1,
+    "prompt": "Bright celebratory chime, a metallic bell ding with a short sparkling shimmer",
+    "event": "achievement"
+  },
+  {
+    "name": "tick",
+    "seconds": 1,
+    "prompt": "Single short clock tick, a crisp mechanical click like a countdown timer",
+    "event": "tick"
+  }
+]
