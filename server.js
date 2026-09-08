@@ -24,7 +24,7 @@ const rules = require('./js/rules');
 
 const PORT = process.env.PORT || 8080;
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+const DATA_DIR = process.env.SPOT_KICK_DATA_DIR || path.join(ROOT, 'data');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const BOARDS_FILE = path.join(DATA_DIR, 'leaderboard.json');
 
@@ -267,10 +267,15 @@ async function api(req, res, url) {
 
 // ---------- static ----------
 function serveStatic(req, res, url) {
-  let rel = decodeURIComponent(url.pathname);
+  let rel;
+  try { rel = decodeURIComponent(url.pathname); }
+  catch { res.writeHead(400); return res.end('bad path'); }
+  if (rel.split(/[\\/]/).some(part => part.startsWith('.') || ['data', 'node_modules', 'tests'].includes(part))) {
+    res.writeHead(404); return res.end('not found');
+  }
   if (rel === '/') rel = '/index.html';
   const file = path.normalize(path.join(ROOT, rel));
-  if (!file.startsWith(ROOT)) { res.writeHead(403); return res.end('forbidden'); }
+  if (!file.startsWith(ROOT + path.sep)) { res.writeHead(403); return res.end('forbidden'); }
   fs.stat(file, (e, st) => {
     if (e || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
     res.writeHead(200, {

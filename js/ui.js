@@ -192,7 +192,7 @@
     $('panel-shoot').classList.toggle('hidden', which !== 'shoot');
     $('panel-dive').classList.toggle('hidden', which !== 'dive');
     $('panel-wait').classList.toggle('hidden', which !== 'wait' && which !== null);
-    if (which === 'wait' || which === null) $('wait-text').textContent = which === null ? '' : $('wait-text').textContent;
+    if (which === null) $('wait-text').textContent = '';
   }
   function setWaitText(t) { $('wait-text').textContent = t; }
   function setSelection(kind, text, canConfirm) {

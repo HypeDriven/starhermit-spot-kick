@@ -32,6 +32,7 @@
     resolving: false,
     countdownTimer: null,
     decisionDeadline: 0,
+    pausedAt: 0,
     decisionTimer: null,
     learnStep: 0,
     hosted: null,            // {code, token, side, pollTimer, lastTick}
@@ -285,6 +286,7 @@
     vs.append(aiBtn, p2Btn);
     body.appendChild(vs);
     G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: 'Quick Match' };
+    $('btn-start-match').disabled = false;
     ui.setupView('Quick Match', 'Five kicks each · sudden death on ties · about 3 minutes · unranked', body);
     audio.event('ui-confirm');
   }
@@ -300,6 +302,7 @@
       ? 'Played today: ' + (done.won ? 'won ' + done.score : 'lost ' + done.score) + '. You can replay, but the ranked result stands.'
       : 'One shared seed for everyone today. First result is ranked.'));
     G.config = Object.assign({ modeLabel: 'Daily Challenge', daily: d, ranked: !done }, d);
+    $('btn-start-match').disabled = false;
     ui.setupView('Daily Challenge', 'Five kicks · Club keeper · ranked once per UTC day · ' + (d.excluded ? 'excluded from ranking' : 'ranked'), body);
     audio.event('ui-confirm');
   }
@@ -327,11 +330,18 @@
       };
       grid.appendChild(b);
     });
-    if (firstOpen) G.config = Object.assign({ modeLabel: 'Journey — ' + firstOpen.name }, firstOpen);
+    if (firstOpen) {
+      G.config = Object.assign({ modeLabel: 'Journey — ' + firstOpen.name }, firstOpen);
+      $('btn-start-match').disabled = false;
+    } else {
+      G.config = null; // journey complete: nothing to start
+      $('btn-start-match').disabled = true;
+    }
     ui.setupView('Journey',
       'Forty stages in four blocks: straight shots, then curve, then pressure, then mastery. Complete a stage to unlock the next.',
       grid);
     if (firstOpen) $('setup-rules').textContent = stageRulesText(firstOpen);
+    else $('setup-rules').textContent = 'Journey complete — every stage finished. Try the daily challenge.';
     audio.event('ui-confirm');
   }
 
@@ -363,12 +373,15 @@
     });
     body.appendChild(seg);
     G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: 'Practice', practice: true };
+    $('btn-start-match').disabled = false;
     ui.setupView('Practice', 'Five kicks each · undo permitted · restart any time · unranked', body);
     audio.event('ui-confirm');
   }
 
   function setupChallenge() {
     setAppState('mode-select');
+    G.config = null; // require an explicit pick; never reuse a previous mode's config
+    $('btn-start-match').disabled = true;
     const grid = ui.el('div', 'stage-grid');
     content.CHALLENGES.forEach(ch => {
       const b = ui.el('button', null, ch.name + ' — ' + ch.blurb);
@@ -377,6 +390,7 @@
         b.classList.add('selected');
         G.config = Object.assign({ modeLabel: 'Challenge — ' + ch.name, challenge: ch }, ch);
         $('setup-rules').textContent = stageRulesText(ch);
+        $('btn-start-match').disabled = false;
         audio.event('ui-confirm');
       };
       grid.appendChild(b);
@@ -416,6 +430,7 @@
       beginHosted(res.data.code, res.data.token, 'B', status);
     };
     ui.setupView('Hosted Play', 'Private invitation matches · reconnect supported · server-authoritative results', body);
+    $('btn-start-match').disabled = true; // hosted matches begin via Create/Join above
     audio.event('ui-confirm');
   }
 
@@ -566,6 +581,7 @@
     const ms = ui.getSettings().timingAssist ? limit * 2 : limit;
     G.decisionDeadline = performance.now() + ms;
     G.decisionTimer = setInterval(() => {
+      if (G.paused) return;
       const left = G.decisionDeadline - performance.now();
       $('sb-clock').textContent = Math.max(0, Math.ceil(left / 1000)) + 's';
       if (left <= 0) {
@@ -872,6 +888,11 @@
   }
 
   function replayMatch() {
+    if (G.mode === 'hosted') {
+      // the hosted session is over server-side; replay as a local quick match
+      G.mode = 'play';
+      G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: 'Quick Match' };
+    }
     if (G.config) { setAppState('preparing'); startMatch(); }
   }
 
@@ -907,21 +928,26 @@
 
   // ---------- pause / visibility ----------
   function pause() {
-    if (G.appState !== 'active' && G.appState !== 'resolving') return;
+    // Only from active play: pausing mid-resolution would be stomped by the
+    // animation completion handler, which forces state back to 'active'.
+    if (G.appState !== 'active') return;
     G.paused = true;
+    G.pausedAt = performance.now();
     setAppState('paused');
     ui.openOverlay('overlay-pause');
     ui.announce('Paused.');
     audio.event('ui-back');
   }
   function resume() {
+    if (!G.paused) { ui.closeOverlay('overlay-pause'); return; } // settings opened from title
+    if (G.decisionTimer) G.decisionDeadline += performance.now() - G.pausedAt;
     G.paused = false;
     ui.closeOverlay('overlay-pause');
     setAppState('active');
     ui.announce('Resumed.');
     audio.event('ui-confirm');
     if (G.hosted) pollHostedSoon();
-    else if (!G.resolving) pumpTurn();
+
   }
 
   function onVisibility() {
@@ -953,6 +979,7 @@
     if (!G.hosted) return;
     const h = G.hosted;
     const res = await platform.sessionSnapshot(h.code, h.token);
+    if (G.hosted !== h) return; // left the match while the request was in flight
     if (!res.ok) {
       ui.setPanels('wait');
       ui.setWaitText('Connection issue (' + res.error + ') — retrying…');
@@ -1009,8 +1036,8 @@
   }
 
   function hostedResults(state) {
-    stopHostedPollingSilently();
     const won = state.winner === G.hosted.side;
+    stopHostedPolling(); // match is over: clears G.hosted so Replay starts a local game
     audio.event('whistle-end');
     audio.event(won ? 'win' : 'lose');
     ui.renderResults({
@@ -1022,7 +1049,6 @@
     });
     setAppState('results');
   }
-  function stopHostedPollingSilently() { if (G.hosted && G.hosted.pollTimer) clearTimeout(G.hosted.pollTimer); }
 
   // ---------- HUD ----------
   function refreshHud() {

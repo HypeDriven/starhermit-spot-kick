@@ -5,15 +5,17 @@
   "main": "server.js",
   "scripts": {
     "test": "jest",
+    "test:e2e": "node tests/e2e.mjs",
     "start": "node server.js"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "three": "^0.182.0"
   },
   "devDependencies": {
-    "jest": "^30.4.2"
+    "jest": "^30.4.2",
+    "playwright-core": "^1.63.0"
   }
 }

@@ -1,13 +1,18 @@
 'use strict';
 
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const testData = fs.mkdtempSync(path.join(os.tmpdir(), 'spot-kick-test-'));
+process.env.SPOT_KICK_DATA_DIR = testData;
 const { server } = require('../server');
 const rules = require('../js/rules');
 const session = require('../js/session');
 
 let port, base;
 beforeAll(done => { server.listen(0, () => { port = server.address().port; base = 'http://127.0.0.1:' + port; done(); }); });
-afterAll(done => { server.close(() => done()); });
+afterAll(done => { server.closeAllConnections(); server.close(() => { fs.rmSync(testData, { recursive: true, force: true }); done(); }); });
 
 async function api(path, opts) {
   const res = await fetch(base + '/api/v1' + path, {

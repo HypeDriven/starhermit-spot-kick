@@ -148,11 +148,11 @@
       if (s.constraints.bannedCurves.length === rules.CURVES.length) errors.push(s.id + ': all curves banned (soft lock)');
       if (s.constraints.bannedHeights.length === rules.HEIGHTS.length) errors.push(s.id + ': all heights banned');
       if (s.constraints.bannedColumns.length === rules.COLUMNS.length) errors.push(s.id + ': all columns banned');
-      // reachable goal: a 'win'/'win-by-2'/'clean-sheet' goal is reachable iff a
-      // shooter can always score from the opening (verify a legal shot exists).
-      const shots = legal.filter(a => a.type === 'shoot' ||
-        rules.legalActions(Object.assign({}, st, { phase: 'shooter' })).length > 0);
-      if (!shots) errors.push(s.id + ': unreachable goal');
+      // reachable goal: from the shooter phase there must be at least one
+      // legal shot, otherwise no goal can ever be scored (soft lock).
+      const shooterView = Object.assign({}, st, { phase: 'shooter' });
+      const shots = rules.legalActions(shooterView).filter(a => a.type === 'shoot');
+      if (shots.length === 0) errors.push(s.id + ': unreachable goal (no legal shot)');
       if (!s.theme || THEMES.every(t => t.id !== s.theme)) errors.push(s.id + ': unknown theme');
     };
     JOURNEY.forEach(s => checkStage(s, 'journey'));
