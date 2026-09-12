@@ -145,6 +145,12 @@
     } catch (_) { /* corrupted save -> defaults, never crash */ }
     return save;
   }
+  // Remote (cloud) doc wins on load; it has already passed the checksum.
+  function adoptSave(doc) {
+    save = Object.assign({}, SAVE_DEFAULTS, doc);
+    persistSave();
+    return save;
+  }
   function persistSave() {
     try { localStorage.setItem(SAVE_KEY, session.encodeSave(save)); } catch (_) {}
   }
@@ -228,19 +234,21 @@
     const b = res.breakdown;
     const body = $('results-body');
     body.innerHTML = '';
-    const table = el('table');
-    table.innerHTML =
-      '<tr><th>Component</th><th>' + res.nameA + '</th><th>' + res.nameB + '</th></tr>' +
-      row('Goals', b.goals.A, b.goals.B) +
-      row('Saves', b.saves.A, b.saves.B) +
-      row('Perfect kicks', b.perfectKicks.A, b.perfectKicks.B) +
-      row('Off target', b.offTarget.A, b.offTarget.B) +
-      row('Invalid actions', b.invalidActions.A, b.invalidActions.B) +
-      row('Kicks taken', b.kicks.A, b.kicks.B);
-    body.appendChild(table);
-    body.appendChild(el('p', 'dim',
-      'Ended: ' + (b.terminalReason || '') + (b.suddenDeath ? ' · sudden death' : '') +
-      (res.elapsedMs ? ' · ' + Math.round(res.elapsedMs / 1000) + 's' : '')));
+    if (b) {
+      const table = el('table');
+      table.innerHTML =
+        '<tr><th>Component</th><th>' + res.nameA + '</th><th>' + res.nameB + '</th></tr>' +
+        row('Goals', b.goals.A, b.goals.B) +
+        row('Saves', b.saves.A, b.saves.B) +
+        row('Perfect kicks', b.perfectKicks.A, b.perfectKicks.B) +
+        row('Off target', b.offTarget.A, b.offTarget.B) +
+        row('Invalid actions', b.invalidActions.A, b.invalidActions.B) +
+        row('Kicks taken', b.kicks.A, b.kicks.B);
+      body.appendChild(table);
+      body.appendChild(el('p', 'dim',
+        'Ended: ' + (b.terminalReason || '') + (b.suddenDeath ? ' · sudden death' : '') +
+        (res.elapsedMs ? ' · ' + Math.round(res.elapsedMs / 1000) + 's' : '')));
+    }
     if (res.extra) body.appendChild(el('p', 'dim', res.extra));
     const ach = $('results-achievements');
     ach.innerHTML = '';
@@ -250,6 +258,25 @@
   }
   function row(label, a, b) {
     return '<tr><td>' + label + '</td><td>' + a + '</td><td>' + b + '</td></tr>';
+  }
+
+  // Read-only platform board (hosted mode), appended when the fetch resolves.
+  function appendBoard(title, entries, me) {
+    const body = $('results-body');
+    if (!body || !entries || !entries.length) return;
+    body.appendChild(el('h3', null, title));
+    const table = el('table');
+    table.className = 'board';
+    let html = '<tr><th>#</th><th>Player</th><th>Score</th></tr>';
+    entries.slice(0, 10).forEach((r, i) => {
+      html += '<tr' + (r.you ? ' class="you"' : '') + '><td>' + (r.rank || (i + 1)) + '</td><td>' +
+        String(r.name).replace(/[<>&]/g, '') + (r.you ? ' (you)' : '') + '</td><td>' + r.score + '</td></tr>';
+    });
+    if (me && typeof me.score === 'number') {
+      html += '<tr class="you"><td>' + (me.rank || '–') + '</td><td>You</td><td>' + me.score + '</td></tr>';
+    }
+    table.innerHTML = html;
+    body.appendChild(table);
   }
 
   // ---------- help: rule cards from current control mappings ----------
@@ -285,10 +312,10 @@
     currentScreen: currentScreen, anyOverlayOpen: anyOverlayOpen,
     announce: announce, alertUser: alertUser, caption: caption,
     loadSettings: loadSettings, saveSettings: saveSettings, getSettings: getSettings, bindSettings: bindSettings,
-    loadSave: loadSave, persistSave: persistSave, getSave: getSave,
+    loadSave: loadSave, persistSave: persistSave, getSave: getSave, adoptSave: adoptSave,
     ACHIEVEMENTS: ACHIEVEMENTS, unlockAchievement: unlockAchievement,
     updateHud: updateHud, setPanels: setPanels, setWaitText: setWaitText, setSelection: setSelection,
-    setupView: setupView, renderResults: renderResults, renderHelp: renderHelp,
+    setupView: setupView, renderResults: renderResults, renderHelp: renderHelp, appendBoard: appendBoard,
     setJourneyProgress: setJourneyProgress, setProfileLine: setProfileLine,
     setLoadingStatus: setLoadingStatus, showCompat: showCompat
   };

@@ -1,7 +1,10 @@
 'use strict';
 
 /*
- * Spot Kick authoritative server.
+ * Spot Kick authoritative dev server (LOCAL DEV ONLY — the repo's own
+ * backend for `npm start`; these session and leaderboard routes are never
+ * called on StarHermit, where hosted play uses realtime rooms, see js/net.js,
+ * and leaderboards are platform-owned/read-only, see js/platform.js).
  * - Static distribution server (no external deps).
  * - GET  /api/v1/time                    platform time (round-trip adjusted client-side)
  * - POST /api/v1/session                 create private match {build, contentVersion, ai?}

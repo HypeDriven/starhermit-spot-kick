@@ -14,6 +14,7 @@
   const audio = window.SpotKickAudio;
   const render = window.SpotKickRender;
   const platform = window.SpotKickPlatform;
+  const rooms = window.SpotKickRooms;
   const ui = window.SpotKickUI;
 
   const BUILD = '1.0.0';
@@ -64,6 +65,23 @@
     ui.bindSettings(onSettingChange);
     platform.syncTime(); // best effort; game works offline regardless
 
+    // Hosted boot: resolve the account nickname, then adopt the cloud save
+    // (remote wins) before the profile line and journey counts render.
+    platform.onSync(() => { if (G.appState === 'title') ui.setProfileLine(profileLine()); });
+    if (platform.hosted()) {
+      ui.setLoadingStatus('Connecting to your account…');
+      platform.initHosted().then((remote) => {
+        if (remote) {
+          try {
+            const parsed = session.decodeSave(remote);
+            if (parsed && parsed.data) ui.adoptSave(parsed.data);
+          } catch (_) { /* malformed remote doc: local cache stays */ }
+        }
+        ui.setJourneyProgress(ui.getSave().journeyDone.length, content.JOURNEY.length);
+        ui.setProfileLine(profileLine());
+      });
+    }
+
     ui.setJourneyProgress(ui.getSave().journeyDone.length, content.JOURNEY.length);
     ui.setProfileLine(profileLine());
 
@@ -86,8 +104,12 @@
   function profileLine() {
     const s = ui.getSave();
     const wins = s.stats.wins, m = s.stats.matches;
-    return m ? ('Guest profile · ' + wins + ' wins in ' + m + ' matches · best streak ' + s.bestStreak)
-             : 'Guest profile — progress is stored on this device';
+    const stats = m ? (wins + ' wins in ' + m + ' matches · best streak ' + s.bestStreak) : null;
+    if (platform.hosted()) {
+      const sync = { saving: 'saving…', synced: 'synced', offline: 'offline' }[platform.getSyncStatus()] || 'offline';
+      return 'Playing as ' + (platform.displayName() || '…') + ' · cloud save ' + sync + (stats ? ' · ' + stats : '');
+    }
+    return m ? ('Guest profile · ' + stats) : 'Guest profile — progress is stored on this device';
   }
 
   function currentTheme() {
@@ -296,14 +318,19 @@
     const day = content.utcDay(new Date(platform.now()));
     const d = content.dailyFor(day);
     const done = ui.getSave().dailyResults[day];
+    const hosted = platform.hosted();
     const body = ui.el('div');
     body.appendChild(ui.el('p', null, 'Seed: ' + d.seed.toString(16) + ' · ' + day + ' (UTC)'));
     body.appendChild(ui.el('p', 'dim', done
-      ? 'Played today: ' + (done.won ? 'won ' + done.score : 'lost ' + done.score) + '. You can replay, but the ranked result stands.'
-      : 'One shared seed for everyone today. First result is ranked.'));
+      ? 'Played today: ' + (done.won ? 'won ' + done.score : 'lost ' + done.score) + '. You can replay, but the recorded result stands.'
+      : (hosted
+        ? 'One shared seed for everyone today. Your first result is recorded to your profile.'
+        : 'One shared seed for everyone today. First result is ranked.')));
     G.config = Object.assign({ modeLabel: 'Daily Challenge', daily: d, ranked: !done }, d);
     $('btn-start-match').disabled = false;
-    ui.setupView('Daily Challenge', 'Five kicks · Club keeper · ranked once per UTC day · ' + (d.excluded ? 'excluded from ranking' : 'ranked'), body);
+    ui.setupView('Daily Challenge', 'Five kicks · Club keeper · ' +
+      (hosted ? 'first result recorded per UTC day' : 'ranked once per UTC day') + ' · ' +
+      (d.excluded ? 'excluded from the board' : (hosted ? 'counted on your profile' : 'ranked')), body);
     audio.event('ui-confirm');
   }
 
@@ -401,8 +428,9 @@
 
   function setupHosted() {
     setAppState('mode-select');
+    if (platform.hosted()) { setupHostedRooms(); return; }
     const body = ui.el('div');
-    body.appendChild(ui.el('p', 'dim', 'Authoritative server match. Share the code for a private invite.'));
+    body.appendChild(ui.el('p', 'dim', 'Authoritative dev-server match. Share the code for a private invite. (On StarHermit, hosted play uses Online Match rooms.)'));
     const rowCreate = ui.el('div', 'row');
     const createBtn = ui.el('button', null, 'Create private match');
     const joinInput = document.createElement('input');
@@ -432,6 +460,230 @@
     ui.setupView('Hosted Play', 'Private invitation matches · reconnect supported · server-authoritative results', body);
     $('btn-start-match').disabled = true; // hosted matches begin via Create/Join above
     audio.event('ui-confirm');
+  }
+
+  // ---- hosted rooms (StarHermit realtime rooms, host-routed) ----
+
+  function setupHostedRooms() {
+    const body = ui.el('div');
+    body.appendChild(ui.el('p', 'dim', 'Online 1v1 shootout. Create a match and a friend can quick-join it, or jump straight into any open match.'));
+    const row = ui.el('div', 'row');
+    const createBtn = ui.el('button', null, 'Create online match');
+    const joinBtn = ui.el('button', null, 'Quick join a match');
+    row.append(createBtn, joinBtn);
+    const status = ui.el('p', 'dim', '');
+    body.append(row, status);
+
+    const fail = (e) => 'Could not start an online match: ' + (e && e.message ? e.message : e) + ' — solo modes work fine.';
+
+    createBtn.onclick = async () => {
+      createBtn.disabled = true; joinBtn.disabled = true;
+      status.textContent = 'Creating…';
+      try {
+        const client = makeRoomsClient();
+        await client.createRoom();
+        wireRoomsClient(client, 'A');
+        status.textContent = 'Match created — waiting for an opponent to join…';
+      } catch (e) {
+        createBtn.disabled = false; joinBtn.disabled = false;
+        status.textContent = fail(e);
+      }
+    };
+    joinBtn.onclick = async () => {
+      createBtn.disabled = true; joinBtn.disabled = true;
+      status.textContent = 'Looking for an open match…';
+      try {
+        const client = makeRoomsClient();
+        const joined = await client.quickJoin();
+        if (!joined) {
+          // No open tables: host one ourselves and wait.
+          await client.createRoom();
+          wireRoomsClient(client, 'A');
+          status.textContent = 'No open match — created one. Waiting for an opponent…';
+          return;
+        }
+        wireRoomsClient(client, 'B');
+        status.textContent = 'Joined — waiting for the host to start…';
+      } catch (e) {
+        createBtn.disabled = false; joinBtn.disabled = false;
+        status.textContent = fail(e);
+      }
+    };
+    ui.setupView('Online Match', 'Private 1v1 shootout · host-authoritative · reconnect supported', body);
+    $('btn-start-match').disabled = true; // the match begins when an opponent joins
+    audio.event('ui-confirm');
+  }
+
+  function makeRoomsClient() {
+    return new rooms.RoomsClient(platform, {
+      rules: rules, session: session,
+      build: BUILD, contentVersion: content.CONTENT_VERSION,
+      onEvent: onRoomsEvent
+    });
+  }
+
+  function wireRoomsClient(client, side) {
+    G.hosted = { client: client, side: side, transport: 'rooms', lastTick: -1 };
+    G.mode = 'hosted';
+    G.hotseat = false;
+    G.humanSides = [side];
+    G.match = null;
+    G.lastHostedState = null;
+    G.lastHostedWaiting = null;
+    G.config = { modeLabel: 'Online Match', rounds: 5, aiDifficulty: 1, goal: 'win', constraints: null, seed: 0 };
+    ui.announce(side === 'A' ? 'Online match created. You are the host.' : 'Joined an online match.');
+  }
+
+  function onRoomsEvent(op, msg) {
+    const h = G.hosted;
+    if (!h || !h.client) return;
+    switch (op) {
+      case 'start': beginRoomsMatch(); break;
+      case 'snap': onRoomsSnap(msg); break;
+      case 'cmd-rejected':
+        ui.alertUser('Rejected: ' + (msg.error || 'command'));
+        audio.event('invalid');
+        refreshRoomsHud();
+        break;
+      case 'result': onRoomsResult(msg); break;
+      case 'peer-left': onRoomsPeerLeft(msg); break;
+      case 'disconnected':
+        ui.alertUser('Connection to the match was lost.');
+        leaveToTitle();
+        break;
+    }
+  }
+
+  function beginRoomsMatch() {
+    const h = G.hosted;
+    if (!h || !h.client) return;
+    if (h.client.isHost) G.match = h.client.hostMatch; // host renders via the local sim
+    setAppState('active');
+    ui.show('screen-play');
+    audio.event('whistle-start');
+    funnel('hosted-start', { side: h.side });
+    refreshRoomsHud();
+  }
+
+  function refreshRoomsHud() {
+    const h = G.hosted;
+    if (!h || !h.client) return;
+    if (G.lastHostedState) refreshHudHosted(G.lastHostedState, G.lastHostedWaiting);
+    else if (h.client.isHost && G.match) refreshHud();
+  }
+
+  function onRoomsSnap(msg) {
+    const h = G.hosted;
+    if (!h || !h.client || !msg.state) return;
+    if (h.lastTick >= 0 && msg.state.tick > h.lastTick + 1) {
+      ui.announce('While you were away: ' + (msg.state.tick - h.lastTick) + ' actions were played. Score ' +
+        msg.state.scoreA + '–' + msg.state.scoreB + '.');
+    }
+    h.lastTick = msg.state.tick;
+    G.lastHostedState = msg.state;
+    G.lastHostedWaiting = msg.waitingFor;
+    if (msg.kick) { animateRoomsKick(msg.kick); return; }
+    refreshRoomsHud();
+  }
+
+  function animateRoomsKick(ev) {
+    G.resolving = true;
+    setAppState('resolving');
+    ui.setPanels(null);
+    render.playKick(ev, {
+      onDone: () => {
+        G.resolving = false;
+        setAppState('active');
+        const word = ev.outcome === 'goal' ? 'GOAL' : ev.outcome === 'saved' ? 'SAVED' : 'OFF TARGET';
+        ui.announce(word + ' — ' + describeKick(ev));
+        audio.event(ev.outcome === 'goal' ? 'goal' : ev.outcome === 'saved' ? 'save' : 'offtarget');
+        if (ev.outcome === 'goal') haptic([20, 40, 20]);
+        refreshRoomsHud();
+        setTimeout(() => {
+          render.resetPositions();
+          if (G.lastHostedState && G.lastHostedState.over) roomsResults();
+          else refreshRoomsHud();
+        }, ui.getSettings().reducedMotion ? 250 : 900);
+      }
+    });
+  }
+
+  function roomsConfirm() {
+    const h = G.hosted, st = currentState();
+    if (!h || !st || !h.client) return;
+    if (G.lastHostedWaiting !== h.side) { ui.alertUser('Waiting for opponent.'); return; }
+    if (!G.sel.zone) { ui.alertUser('Pick a goal zone first.'); return; }
+    const type = st.phase === 'keeper' ? 'dive' : 'shoot';
+    const params = st.phase === 'keeper'
+      ? { dir: G.sel.zone.dir, height: G.sel.zone.height, timing: G.sel.timing }
+      : { dir: G.sel.zone.dir, height: G.sel.zone.height, curve: G.sel.curve };
+    audio.event(st.phase === 'keeper' ? 'dive-committed' : 'kick');
+    haptic(20);
+    if (h.client.isHost) {
+      const res = h.client.hostApplyCommand({ type: type, player: 'A', params: params });
+      if (!res.ok) {
+        ui.alertUser('Invalid action: ' + explainReason(res.reason));
+        audio.event('invalid');
+        refreshRoomsHud();
+        return;
+      }
+      G.sel.zone = null;
+    } else {
+      h.client.sendCommand({
+        id: 'c' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36),
+        tick: st.tick, type: type, player: 'B', params: params
+      });
+      G.sel.zone = null;
+      ui.setPanels('wait');
+      ui.setWaitText('Waiting for opponent…');
+    }
+  }
+
+  function roomsResults() {
+    const h = G.hosted;
+    const st = G.lastHostedState;
+    if (!st) return;
+    const won = st.winner === h.side;
+    audio.event('whistle-end');
+    audio.event(won ? 'win' : 'lose');
+    ui.renderResults({
+      headline: won ? 'You win!' : 'You lose',
+      nameA: 'You' + (h.side === 'A' ? '' : ' (away)'),
+      nameB: 'Opponent',
+      breakdown: rules.breakdown(st),
+      newAchievements: [],
+      next: 'Authoritative result recorded by the room host.'
+    });
+    setAppState('results');
+  }
+
+  function onRoomsResult(msg) {
+    // The host already renders from the final snapshot; a guest that missed
+    // the last snap (e.g. reconnect race) still gets an honest result screen.
+    if (G.lastHostedState && G.lastHostedState.over) return;
+    const r = msg.result || msg;
+    G.lastHostedState = null;
+    ui.renderResults({
+      headline: (r.winner === (G.hosted && G.hosted.side)) ? 'You win!' : 'You lose',
+      nameA: 'Player A', nameB: 'Player B',
+      breakdown: r.breakdown || null,
+      newAchievements: [],
+      next: 'Authoritative result recorded by the room host.'
+    });
+    setAppState('results');
+  }
+
+  function onRoomsPeerLeft(msg) {
+    if (G.lastHostedState && G.lastHostedState.over) return;
+    ui.announce(msg.seat === 'A' ? 'The host left — the match ended.' : 'Your opponent left — the match ended.');
+    ui.renderResults({
+      headline: 'Match ended',
+      nameA: 'You', nameB: 'Opponent',
+      breakdown: G.lastHostedState ? rules.breakdown(G.lastHostedState) : null,
+      newAchievements: [],
+      next: msg.seat === 'A' ? 'The host left the room.' : 'Your opponent left the room.'
+    });
+    setAppState('results');
   }
 
   function randSeed() {
@@ -837,6 +1089,7 @@
         save.stats.dailies++;
         if (save.stats.dailies >= 7) unlock('daily_7');
         submitDailyScore(env, st);
+        showDailyBoard();
       }
       next = 'Next daily arrives at 00:00 UTC.';
     }
@@ -847,6 +1100,7 @@
     }
 
     ui.persistSave();
+    platform.queueCloudSave(session.encodeSave(ui.getSave())); // cloud mirror; localStorage stays the cache
     ui.setProfileLine(profileLine());
     funnel('round-end', { mode: G.mode, won: !!won });
 
@@ -872,9 +1126,10 @@
   }
 
   async function submitDailyScore(env, st) {
+    if (platform.hosted()) return; // platform boards are read-only; the record stays local + cloud
     const entry = {
       board: 'daily-' + G.config.daily.day,
-      name: 'Guest',
+      name: platform.displayName() || 'Guest',
       ruleset: rules.VERSION,
       contentVersion: content.CONTENT_VERSION,
       seed: env.seed,
@@ -885,6 +1140,16 @@
     };
     const res = await platform.submitScore(entry);
     if (!res.ok) console.info('leaderboard submit skipped:', res.error);
+  }
+
+  // Hosted daily: read-only platform board, appended to the results screen.
+  function showDailyBoard() {
+    if (!platform.hosted()) return;
+    platform.fetchPlatformLeaderboard({ pageSize: 10 }).then((board) => {
+      if (board && board.entries && board.entries.length && ui.currentScreen() === 'screen-results') {
+        ui.appendBoard('Platform board', board.entries, board.me);
+      }
+    }).catch(() => { /* offline: local record already shown */ });
   }
 
   function replayMatch() {
@@ -977,6 +1242,7 @@
 
   async function pollHosted() {
     if (!G.hosted) return;
+    if (G.hosted.transport === 'rooms') return; // rooms use the realtime socket, not polling
     const h = G.hosted;
     const res = await platform.sessionSnapshot(h.code, h.token);
     if (G.hosted !== h) return; // left the match while the request was in flight
@@ -996,8 +1262,14 @@
     if (snap.state.over) { hostedResults(snap.state); return; }
     h.pollTimer = setTimeout(pollHosted, 1500);
   }
-  function pollHostedSoon() { if (G.hosted) { clearTimeout(G.hosted.pollTimer); pollHosted(); } }
-  function stopHostedPolling() { if (G.hosted && G.hosted.pollTimer) clearTimeout(G.hosted.pollTimer); G.hosted = null; }
+  function pollHostedSoon() { if (G.hosted && G.hosted.transport !== 'rooms') { clearTimeout(G.hosted.pollTimer); pollHosted(); } }
+  function stopHostedPolling() {
+    if (G.hosted && G.hosted.client) G.hosted.client.leave();
+    if (G.hosted && G.hosted.pollTimer) clearTimeout(G.hosted.pollTimer);
+    G.hosted = null;
+    G.lastHostedState = null;
+    G.lastHostedWaiting = null;
+  }
 
   function refreshHudHosted(state, waitingFor) {
     G.lastHostedState = state;
@@ -1005,7 +1277,7 @@
     const me = G.hosted.side;
     const myTurn = waitingFor === me;
     ui.updateHud(state, {
-      modeLabel: 'Hosted ' + G.hosted.code,
+      modeLabel: G.hosted.transport === 'rooms' ? 'Online Match' : 'Hosted ' + G.hosted.code,
       objective: myTurn ? (state.phase === 'keeper' ? 'Your dive' : 'Your kick') : 'Opponent deciding…',
       phaseText: 'Score ' + state.scoreA + '–' + state.scoreB + (state.suddenDeath ? ' · sudden death' : '')
     });
@@ -1105,6 +1377,7 @@
   // Hosted commit replaces local confirm when in hosted mode
   const origConfirm = confirmSelection;
   confirmSelection = function () {
+    if (G.mode === 'hosted' && G.hosted && G.hosted.transport === 'rooms') { roomsConfirm(); return; }
     if (G.mode === 'hosted' && G.hosted) { hostedConfirm(); return; }
     origConfirm();
   };
