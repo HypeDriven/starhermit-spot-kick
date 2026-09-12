@@ -156,6 +156,10 @@
       audio.unlock();
       handleAction(btn.dataset.action, btn);
     });
+    document.querySelectorAll('[data-zone]').forEach(b => b.addEventListener('click', () => {
+      const parts = b.dataset.zone.split(':');
+      onZonePick({ dir: parts[0], height: parts[1] });
+    }));
     document.querySelectorAll('[data-curve]').forEach(b => b.addEventListener('click', () => {
       audio.unlock();
       G.sel.curve = b.dataset.curve;
@@ -907,6 +911,12 @@
   function updateSelectionUi() {
     const st = currentState();
     if (!st) return;
+    const key = G.sel.zone ? G.sel.zone.dir + ':' + G.sel.zone.height : '';
+    document.querySelectorAll('[data-zone]').forEach(b => {
+      const on = b.dataset.zone === key;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
     if (st.phase === 'keeper') {
       ui.setSelection('dive', G.sel.zone
         ? 'Dive ' + G.sel.zone.dir + ' ' + G.sel.zone.height + ' · ' + G.sel.timing
@@ -1342,6 +1352,7 @@
     });
     $('btn-undo').classList.toggle('hidden', G.mode !== 'practice' || G.match.undoStack.length === 0);
     audio.setTension(st.suddenDeath);
+    updateSelectionUi();
   }
 
   // ---------- misc ----------
@@ -1361,7 +1372,41 @@
   function onResize() {
     const w = window.innerWidth, h = window.innerHeight;
     render.resize(w, h, window.devicePixelRatio || 1);
+    syncSafeInsets();
   }
+
+  // Tell the renderer which bands of the canvas the HUD covers (status text at
+  // the top, control tray at the bottom) so the goal is framed between them.
+  function syncSafeInsets() {
+    if (!render.setSafeInsets) return;
+    const H = window.innerHeight, W = window.innerWidth;
+    const top = document.getElementById('hud-top');
+    const controls = document.getElementById('hud-controls');
+    const ins = { top: 0, bottom: 0, left: 0, right: 0 };
+    if (top && top.offsetParent !== null) ins.top = Math.min(H * 0.3, Math.max(0, top.getBoundingClientRect().bottom));
+    if (controls && controls.offsetParent !== null) {
+      const r = controls.getBoundingClientRect();
+      const landscape = W > H && H <= 500;
+      if (landscape) {
+        // side-by-side tray: only the columns it occupies are covered
+        const panel = controls.querySelector('#panel-shoot:not(.hidden), #panel-dive:not(.hidden), #panel-wait:not(.hidden)');
+        const actions = document.getElementById('hud-actions');
+        if (panel) ins.left = Math.min(W * 0.45, panel.getBoundingClientRect().right);
+        if (actions) ins.right = Math.min(W * 0.3, W - actions.getBoundingClientRect().left);
+      } else {
+        const visible = [...controls.children].filter(c => !c.classList.contains('hidden'));
+        const topMost = visible.length ? Math.min(...visible.map(c => c.getBoundingClientRect().top)) : r.bottom;
+        ins.bottom = Math.min(H * 0.55, Math.max(0, H - topMost));
+      }
+    }
+    render.setSafeInsets(ins);
+  }
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => syncSafeInsets());
+    ['hud-top', 'hud-controls', 'panel-shoot', 'panel-dive', 'panel-wait'].forEach(id => { const el = document.getElementById(id); if (el) ro.observe(el); });
+  }
+  const hudMo = new MutationObserver(() => syncSafeInsets());
+  ['panel-shoot', 'panel-dive', 'panel-wait'].forEach(id => { const el = document.getElementById(id); if (el) hudMo.observe(el, { attributes: true, attributeFilter: ['class'] }); });
 
   // ---------- main loop ----------
   let lastFrame = 0;

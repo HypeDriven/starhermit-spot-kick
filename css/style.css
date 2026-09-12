@@ -101,7 +101,21 @@ button + button { margin-left: 8px; }
   display: flex; flex-direction: column; gap: 8px; align-items: center;
   max-width: min(92vw, 420px);
 }
+/* Wide enough viewports: zone grid beside the curve/timing controls keeps the
+   tray short so the goal stays framed above it */
+@media (min-width: 560px) {
+  #panel-shoot, #panel-dive {
+    display: grid; grid-template-columns: auto auto; column-gap: 14px; row-gap: 6px;
+    align-items: center; justify-items: center; max-width: min(92vw, 520px);
+  }
+  #panel-shoot .panel-label, #panel-dive .panel-label { grid-column: 1 / -1; margin: 0; }
+  #panel-shoot .zone-grid, #panel-dive .zone-grid { grid-row: span 3; }
+}
 .panel-label { font-size: 14px; opacity: 0.9; }
+/* six visible goal-zone buttons mirroring the 3D pick planes (44px targets) */
+.zone-grid { display: grid; grid-template-columns: repeat(3, 48px); gap: 6px; }
+.zone-grid button { min-width: 48px; min-height: 44px; padding: 0; font-size: 20px; background: #24344f; }
+.zone-grid button.on { background: var(--accent-2); outline: 2px solid var(--accent); }
 .seg { display: flex; gap: 8px; }
 .seg button { background: #24344f; padding: 8px 14px; }
 .seg button.on { background: var(--accent-2); outline: 2px solid var(--accent); }
@@ -174,7 +188,13 @@ body.high-contrast button { border: 2px solid #fff; }
   #hud-controls { flex-direction: row; align-items: flex-end; justify-content: space-between; }
   #hud-actions { flex-direction: column; gap: 8px; }
   #hud-actions button { min-width: 48px; min-height: 48px; }
-  #panel-shoot, #panel-dive { padding: 8px 12px; }
+  /* narrow vertical tray in the left column so the goal keeps the centre */
+  #panel-shoot, #panel-dive { display: flex; flex-direction: column; padding: 6px 8px; gap: 4px; max-width: 240px; }
+  #panel-shoot .panel-label, #panel-dive .panel-label { display: none; }
+  .zone-grid { grid-template-columns: repeat(3, 44px); gap: 4px; }
+  .seg button { padding: 6px 8px; font-size: 13px; min-height: 40px; }
+  #shoot-selection, #dive-selection { font-size: 12px; margin: 0; }
+  #btn-confirm-shot, #btn-confirm-dive { font-size: 15px; padding: 8px 22px; min-height: 40px; }
 }
 /* Left-handed: mirror the action tray */
 body.left-handed #hud-controls { align-items: flex-start; }

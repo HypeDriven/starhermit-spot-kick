@@ -58,6 +58,10 @@
     renderer.toneMappingExposure = 1.05;
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 220);
+    // the camera must see every layer: environment, gameplay pieces (ball,
+    // keeper, posts) and FX (zone highlight)
+    camera.layers.enable(LAYER_GAME);
+    camera.layers.enable(LAYER_FX);
     canvas.addEventListener('webglcontextlost', onContextLost, false);
     canvas.addEventListener('webglcontextrestored', onContextRestored, false);
     bindPointer();
@@ -171,7 +175,8 @@
     const zoneGeo = new THREE.PlaneGeometry(FRAME.GOAL_W / 3, FRAME.GOAL_H / 2);
     cols.forEach((c, ci) => {
       rows.forEach((h, ri) => {
-        const zm = new THREE.Mesh(zoneGeo, new THREE.MeshBasicMaterial({ visible: false }));
+        // double-sided so the keeper camera (behind the goal) can pick them too
+        const zm = new THREE.Mesh(zoneGeo, new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }));
         zm.position.set(-FRAME.GOAL_W / 3 + ci * FRAME.GOAL_W / 3,
           FRAME.GOAL_H * 0.75 - ri * FRAME.GOAL_H / 2, FRAME.GOAL_Z - 0.05);
         zm.layers.set(LAYER_FX);
@@ -318,12 +323,65 @@
   }
 
   // ---------- camera ----------
+  let currentView = 'shoot';
+  let safeInsets = { top: 0, bottom: 0, left: 0, right: 0 }; // CSS px covered by HUD
+
+  function setSafeInsets(ins) {
+    safeInsets = Object.assign({ top: 0, bottom: 0, left: 0, right: 0 }, ins || {});
+    applyViewOffset();
+    setView(currentView, true);
+  }
+
+  // Frame the scene inside the part of the canvas not covered by HUD chrome.
+  function applyViewOffset() {
+    if (!renderer || !camera) return;
+    const size = renderer.getSize(new THREE.Vector2());
+    const W = size.x || 1, H = size.y || 1;
+    const sw = Math.max(1, W - safeInsets.left - safeInsets.right);
+    const sh = Math.max(1, H - safeInsets.top - safeInsets.bottom);
+    if (sw < W * 0.4 || sh < H * 0.28) { camera.aspect = W / H; camera.clearViewOffset(); }
+    else { camera.aspect = sw / sh; camera.setViewOffset(sw, sh, -safeInsets.left, -safeInsets.top, W, H); }
+    camera.updateProjectionMatrix();
+  }
+
+  // Authored camera, pulled straight back along its own axis until the whole
+  // goal (plus padding) fits the horizontal and vertical field of view.
+  function fittedTarget(view) {
+    const t = view === 'keep' ? FRAME.CAM_KEEP : FRAME.CAM_SHOOT;
+    const pos = new THREE.Vector3(t.x, t.y, t.z), look = new THREE.Vector3(t.lx, t.ly, t.lz);
+    const probe = new THREE.PerspectiveCamera(camera.fov, camera.aspect || 1, 0.1, 220);
+    const pts = [];
+    const pad = 0.9;
+    for (const x of [-FRAME.GOAL_W / 2 - pad, FRAME.GOAL_W / 2 + pad])
+      for (const y of [-0.2, FRAME.GOAL_H + pad]) pts.push(new THREE.Vector3(x, y, FRAME.GOAL_Z));
+    // the ball on the spot is kept in frame too, except in very short viewports
+    // where the goal (the actual target) needs all the height it can get
+    const shortView = camera.view ? camera.view.fullHeight < 300 : false;
+    if (view !== 'keep' && !shortView) pts.push(new THREE.Vector3(0, 0, FRAME.SPOT.z + 0.6));
+    const dir = pos.clone().sub(look).normalize();
+    const v = new THREE.Vector3();
+    // start closer than authored and pull back until everything fits, so the
+    // goal fills the usable area on every aspect ratio
+    const d0 = pos.distanceTo(look);
+    pos.copy(look).addScaledVector(dir, d0 * 0.6);
+    for (let i = 0; i < 16; i++) {
+      probe.position.copy(pos); probe.lookAt(look); probe.updateMatrixWorld(); probe.updateProjectionMatrix();
+      let over = 0;
+      for (const q of pts) { v.copy(q).project(probe); over = Math.max(over, Math.abs(v.x) / 0.95, Math.abs(v.y) / 0.92); }
+      if (over <= 1) break;
+      const d = pos.distanceTo(look);
+      pos.copy(look).addScaledVector(dir, d * Math.min(1.6, over + 0.02));
+    }
+    return { pos: pos, look: look };
+  }
+
   function setView(view, instant) {
-    const target = view === 'keep' ? FRAME.CAM_KEEP : FRAME.CAM_SHOOT;
-    const to = {
-      pos: new THREE.Vector3(target.x, target.y, target.z),
-      look: new THREE.Vector3(target.lx, target.ly, target.lz)
-    };
+    currentView = view === 'keep' ? 'keep' : 'shoot';
+    const to = fittedTarget(currentView);
+    if (scene && scene.fog) { // fog follows the fitted distance so a far camera never fogs the goal
+      const d = to.pos.distanceTo(new THREE.Vector3(0, 0, FRAME.GOAL_Z));
+      scene.fog.near = d + 22; scene.fog.far = d + 120;
+    }
     if (instant || reducedMotion || !camera) {
       camera.position.copy(to.pos);
       camera.lookAt(to.look);
@@ -442,6 +500,8 @@
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    applyViewOffset();
+    if (built) setView(currentView, true); // refit for the new aspect
   }
 
   function renderFrame(now) {
@@ -462,11 +522,22 @@
   function setReducedMotion(v) { reducedMotion = !!v; if (reducedMotion) shakeAmp = 0; }
   function setTheme(themeDef) { buildScene(themeDef); setView('shoot', true); }
 
+  /** Canvas-space centre of a goal zone under the live camera (for tests/tools). */
+  function zoneScreenPos(zone) {
+    if (!camera || !canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const v = zoneCenter(zone).project(camera);
+    return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
+  }
+
   // deterministic per-tier diagnostics for validation captures
   function stats() {
     if (!renderer) return null;
     const i = renderer.info;
-    return { drawCalls: i.render.calls, triangles: i.render.triangles, quality: quality };
+    return { drawCalls: i.render.calls, triangles: i.render.triangles, quality: quality,
+      cam: camera ? camera.position.toArray().map(n => +n.toFixed(2)) : null,
+      view: camera && camera.view ? [camera.view.offsetX, camera.view.offsetY, camera.view.width, camera.view.height, camera.view.fullWidth, camera.view.fullHeight] : null,
+      insets: safeInsets };
   }
 
   return {
@@ -476,6 +547,7 @@
     setReducedMotion: setReducedMotion,
     setView: setView, playKick: playKick, skip: skip, resetPositions: resetPositions,
     showZoneHighlight: showZoneHighlight, setInteractive: setInteractive,
-    resize: resize, renderFrame: renderFrame, stats: stats
+    resize: resize, setSafeInsets: setSafeInsets, renderFrame: renderFrame, stats: stats,
+    zoneScreenPos: zoneScreenPos
   };
 });

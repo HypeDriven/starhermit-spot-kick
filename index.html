@@ -74,7 +74,15 @@
 
     <div id="hud-controls">
       <div id="panel-shoot" class="hidden" role="group" aria-label="Shot controls">
-        <p class="panel-label">Aim: tap a goal zone, choose curve, confirm.</p>
+        <p class="panel-label">Aim: tap a goal zone (on the goal or below), choose curve, confirm.</p>
+        <div class="zone-grid" role="group" aria-label="Goal zones">
+          <button type="button" data-zone="left:high" aria-label="Left high">↖</button>
+          <button type="button" data-zone="center:high" aria-label="Center high">↑</button>
+          <button type="button" data-zone="right:high" aria-label="Right high">↗</button>
+          <button type="button" data-zone="left:low" aria-label="Left low">↙</button>
+          <button type="button" data-zone="center:low" aria-label="Center low">↓</button>
+          <button type="button" data-zone="right:low" aria-label="Right low">↘</button>
+        </div>
         <div class="seg" role="radiogroup" aria-label="Curve">
           <button type="button" data-curve="left" role="radio" aria-checked="false">Curve ↰</button>
           <button type="button" data-curve="none" role="radio" aria-checked="true" class="on">Straight</button>
@@ -86,6 +94,14 @@
 
       <div id="panel-dive" class="hidden" role="group" aria-label="Keeper controls">
         <p class="panel-label">Read the shot: pick a zone and dive timing.</p>
+        <div class="zone-grid" role="group" aria-label="Goal zones">
+          <button type="button" data-zone="left:high" aria-label="Left high">↖</button>
+          <button type="button" data-zone="center:high" aria-label="Center high">↑</button>
+          <button type="button" data-zone="right:high" aria-label="Right high">↗</button>
+          <button type="button" data-zone="left:low" aria-label="Left low">↙</button>
+          <button type="button" data-zone="center:low" aria-label="Center low">↓</button>
+          <button type="button" data-zone="right:low" aria-label="Right low">↘</button>
+        </div>
         <div class="seg" role="radiogroup" aria-label="Dive timing">
           <button type="button" data-timing="early" role="radio" aria-checked="false">Early</button>
           <button type="button" data-timing="on" role="radio" aria-checked="true" class="on">On time</button>

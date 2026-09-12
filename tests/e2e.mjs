@@ -150,23 +150,11 @@ async function humanMove(page, phase, move, cur) {
 
 // Project a logical goal-zone center to canvas client coordinates so we can
 // really tap a visible zone on the canvas (replicates FRAME + camera framing).
-const zoneScreenPos = (page, phase, dir, height) => page.evaluate(([phase, dir, height]) => {
-  const canvas = document.querySelector('#game-canvas');
-  if (!canvas) return null;
-  const rect = canvas.getBoundingClientRect();
-  const cam = new THREE.PerspectiveCamera(46, rect.width / rect.height || (16 / 9), 0.1, 220);
-  const keep = phase !== 'shoot';
-  const pos = keep ? [0, 2.4, -9.5] : [0, 2.6, 17.5];
-  const look = keep ? [0, 1.3, 11] : [0, 1.4, 0];
-  cam.position.set(pos[0], pos[1], pos[2]);
-  cam.lookAt(look[0], look[1], look[2]);
-  cam.updateMatrixWorld();
-  const ci = ['left', 'center', 'right'].indexOf(dir);
-  const x = -7.32 / 3 + ci * (7.32 / 3);
-  const zy = height === 'high' ? 2.44 * 0.75 : 2.44 * 0.25;
-  const v = new THREE.Vector3(x, zy, 0).project(cam);
-  return { x: rect.left + ((v.x + 1) / 2) * rect.width, y: rect.top + ((1 - v.y) / 2) * rect.height };
-}, [phase, dir, height]);
+const zoneScreenPos = (page, phase, dir, height) => page.evaluate(([dir, height]) => {
+  // the renderer fits the camera to the viewport and HUD, so ask it where the
+  // zone is rather than reconstructing a fixed camera here
+  return window.SpotKickRender.zoneScreenPos({ dir, height });
+}, [dir, height]);
 
 // ---------- one full pass ----------
 async function runPass(browser, name, ctxOpts, { full }) {
