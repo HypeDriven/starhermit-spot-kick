@@ -384,6 +384,80 @@ async function runMobile(browser, name) {
   console.log(`ok - ${name}: no page errors`);
 }
 
+
+// ---------- graphics settings: real UI, live apply, persistence ----------
+async function runGraphics(browser, name, ctxOpts) {
+  const errors = [];
+  const context = await browser.newContext(ctxOpts);
+  const page = await context.newPage();
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if ((m.type() !== 'error' && m.type() !== 'warning') || browserNoise.test(m.text())) return;
+    const url = m.location()?.url || '';
+    if (/Failed to load resource/.test(m.text()) && /\/api\/|\/favicon/.test(url)) return;
+    errors.push(`console ${m.type()}: ${m.text()}`);
+  });
+  const tap = async (sel) => (ctxOpts.hasTouch ? page.tap(sel) : page.click(sel));
+  const state = () => page.evaluate(() => ({
+    body: document.body.dataset.gfxPreset,
+    canvas: document.getElementById('game-canvas').dataset.gfxPreset,
+    quality: document.getElementById('opt-quality').value,
+    bloom: document.getElementById('gfx-bloom').value,
+    summary: document.getElementById('gfx-summary').textContent,
+  }));
+  try {
+    await page.goto(BASE, { waitUntil: 'load' });
+    await page.waitForSelector('#screen-title:not(.hidden)', { timeout: 15000 });
+    let st = await state();
+    if (st.quality !== 'auto' || st.body !== 'low') throw new Error(`expected Auto→low on software GPU, got ${JSON.stringify(st)}`);
+    ok(`${name}: Auto graphics resolved to "${st.body}" (${st.summary})`);
+
+    // open Settings from the title screen and use the Graphics section
+    await tap('#screen-title [data-action="settings"]');
+    await page.waitForSelector('#overlay-pause:not(.hidden)');
+    await page.locator('#opt-quality').scrollIntoViewIfNeeded();
+    if (!(await page.isVisible('#opt-quality'))) throw new Error('quality select not visible');
+    await page.selectOption('#opt-quality', 'low');
+    st = await state();
+    if (st.body !== 'low' || st.canvas !== 'low') throw new Error(`Low not applied: ${JSON.stringify(st)}`);
+    await page.selectOption('#opt-quality', 'high');
+    st = await state();
+    if (st.body !== 'high' || st.canvas !== 'high') throw new Error(`High not applied: ${JSON.stringify(st)}`);
+    const post = await page.evaluate(() => window.SpotKickRender.stats().post || null);
+    await page.waitForFunction(() => window.SpotKickRender.stats().post === true, null, { timeout: 5000 });
+    ok(`${name}: preset Low → High applied live (post chain ${post === null ? 'pending' : 'on'})`);
+    // one per-category override
+    await page.locator('#gfx-bloom').scrollIntoViewIfNeeded();
+    await page.selectOption('#gfx-bloom', 'off');
+    const r = await page.evaluate(() => window.SpotKickRender.graphicsInfo().resolved);
+    if (r.bloom !== 'off' || r.preset !== 'high') throw new Error(`bloom override not applied: ${JSON.stringify(r)}`);
+    await page.locator('#gfx-fieldset').screenshot({ path: SHOT('graphics', name) });
+    ok(`${name}: bloom override applied (${(await state()).summary})`);
+
+    // survives reload
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForSelector('#screen-title:not(.hidden)', { timeout: 15000 });
+    st = await state();
+    if (st.quality !== 'high' || st.body !== 'high' || st.bloom !== 'off') throw new Error(`settings not persisted: ${JSON.stringify(st)}`);
+    ok(`${name}: graphics settings persisted across reload`);
+
+    // choosing a preset clears overrides; Ultra renders without errors; back to Low
+    await tap('#screen-title [data-action="settings"]');
+    await page.waitForSelector('#overlay-pause:not(.hidden)');
+    await page.selectOption('#opt-quality', 'ultra');
+    st = await state();
+    if (st.body !== 'ultra' || st.bloom !== 'preset') throw new Error(`Ultra did not clear overrides: ${JSON.stringify(st)}`);
+    await page.waitForTimeout(600);
+    await page.selectOption('#opt-quality', 'low');
+    await page.waitForTimeout(300);
+    ok(`${name}: preset change clears overrides; Ultra and Low render cleanly`);
+  } finally {
+    await context.close();
+  }
+  if (errors.length) throw new Error(`${name} graphics pass had console output:\n  ${errors.join('\n  ')}`);
+  console.log(`ok - ${name}: graphics pass has no console errors/warnings`);
+}
+
 // ---------- main ----------
 let browser = null;
 try {
@@ -394,6 +468,8 @@ try {
   console.log(`serving ${ROOT} at ${BASE}`);
   await runPass(browser, 'desktop', { viewport: { width: 1280, height: 800 } }, { full: true });
   await runMobile(browser, 'mobile');
+  await runGraphics(browser, 'graphics-desktop', { viewport: { width: 1280, height: 800 } });
+  await runGraphics(browser, 'graphics-mobile', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   console.log('\nE2E PASS — spot-kick, desktop + mobile, no page errors');
 } catch (e) {
   failures++;

@@ -66,6 +66,10 @@ button + button { margin-left: 8px; }
   background: var(--panel); backdrop-filter: blur(3px);
   overflow-y: auto; text-align: center;
 }
+/* tall content scrolls from the top instead of being centred off-screen */
+.overlay { justify-content: flex-start; }
+.overlay > :first-child { margin-top: auto; }
+.overlay > :last-child { margin-bottom: auto; }
 .screen.play { background: transparent; backdrop-filter: none; pointer-events: none; justify-content: space-between; }
 .screen.play > * { pointer-events: auto; }
 
@@ -199,3 +203,26 @@ body.high-contrast button { border: 2px solid #fff; }
 /* Left-handed: mirror the action tray */
 body.left-handed #hud-controls { align-items: flex-start; }
 body.left-handed #hud-actions { order: -1; }
+
+/* Graphics settings section */
+.gfx-fieldset { min-inline-size: 0; }
+.gfx-fieldset label > span:first-child { flex: 1 1 auto; min-width: 0; }
+.gfx-fieldset select { flex: 0 1 auto; max-width: 64%; min-width: 0; font-size: 14px; }
+.gfx-fieldset .range-row { display: flex; align-items: center; gap: 8px; flex: 0 1 58%; min-width: 0; white-space: nowrap; }
+.gfx-fieldset .range-row input[type="range"] { width: auto; flex: 1 1 auto; min-width: 60px; }
+.gfx-fieldset .range-row output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.gfx-categories { display: flex; flex-direction: column; gap: 8px; }
+fieldset label.check { justify-content: flex-start; }
+.gfx-summary { font-size: 13px; opacity: 0.8; overflow-wrap: anywhere; }
+.gfx-note { font-size: 13px; color: #ffd08a; }
+@media (min-width: 1024px) {
+  .settings-grid { width: min(94vw, 1040px); grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); }
+  .settings-grid .gfx-fieldset { grid-row: span 2; }
+}
+
+/* Frame-rate readout: below the status bar, left edge, never intercepts input */
+#fps-meter {
+  position: absolute; z-index: 9; left: calc(8px + var(--safe-left)); top: calc(30px + var(--safe-top));
+  pointer-events: none; font: 12px/1.3 ui-monospace, monospace; color: #cfe0ff;
+  background: rgba(5,9,18,0.6); padding: 2px 6px; border-radius: 4px;
+}

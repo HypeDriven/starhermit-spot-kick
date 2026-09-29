@@ -9,6 +9,9 @@
 <title>Spot Kick</title>
 <link rel="stylesheet" href="./css/style.css" />
 <script src="./js/three.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "./js/vendor/three/three-global.js", "three/addons/": "./js/vendor/three/addons/" } }
+</script>
 </head>
 <body>
 <div id="app">
@@ -136,15 +139,21 @@
         <label>Voice cues <input type="range" id="opt-voice" min="0" max="100" value="80" /><output for="opt-voice"></output></label>
       </fieldset>
 
-      <fieldset>
-        <legend>Graphics</legend>
-        <label>Quality
-          <select id="opt-quality">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high" selected>High</option>
+      <fieldset id="gfx-fieldset" class="gfx-fieldset">
+        <legend id="gfx-legend">Graphics</legend>
+        <label><span id="gfx-quality-label">Quality</span>
+          <select id="opt-quality" data-gfx="preset">
+            <option value="auto">Auto</option>
           </select>
         </label>
+        <label class="gfx-range"><span id="gfx-scale-label">Render scale</span>
+          <span class="range-row"><input type="range" id="opt-render-scale" data-gfx="render_scale" min="50" max="200" step="5" value="100" /><output id="opt-render-scale-out" for="opt-render-scale">100%</output></span>
+        </label>
+        <div id="gfx-categories" class="gfx-categories"></div>
+        <label class="check"><input type="checkbox" id="gfx-adaptive" data-gfx="adaptive" checked /> <span id="gfx-adaptive-label">Adaptive resolution</span></label>
+        <label class="check"><input type="checkbox" id="gfx-show-fps" data-gfx="show_fps" /> <span id="gfx-fps-label">Show frame rate</span></label>
+        <p id="gfx-summary" class="gfx-summary" aria-live="polite"></p>
+        <p id="gfx-post-note" class="gfx-note hidden" role="status"></p>
         <label>Theme <select id="opt-theme"></select></label>
       </fieldset>
 
@@ -188,6 +197,9 @@
     <button type="button" data-action="close-help">Close</button>
   </section>
 
+  <!-- Frame-rate readout (Graphics → Show frame rate); never intercepts input -->
+  <div id="fps-meter" class="hidden" aria-hidden="true"></div>
+
   <!-- Captions + live regions -->
   <p id="captions" class="hidden" aria-hidden="true"></p>
   <div id="live-region" class="visually-hidden" aria-live="polite" role="status"></div>
@@ -198,10 +210,13 @@
 <script src="./js/content.js"></script>
 <script src="./js/session.js"></script>
 <script src="./js/audio.js"></script>
+<script src="./js/gfx.js"></script>
 <script src="./js/render.js"></script>
+<script src="./js/gfxpanel.js"></script>
 <script src="./js/platform.js"></script>
 <script src="./js/net.js"></script>
 <script src="./js/ui.js"></script>
 <script src="./js/bootstrap.js"></script>
+<script type="module" src="./js/post.js"></script>
 </body>
 </html>

@@ -55,7 +55,12 @@
     ui.renderHelp(keyboardBindings());
 
     const canvas = $('game-canvas');
-    const ok = render.init(canvas, { onPick: onZonePick, onHover: onZoneHover });
+    // canvas MSAA is a context attribute: skip it only when the saved choice explicitly avoids MSAA
+    const gSaved = ui.getGfx();
+    const gfxModel = window.SpotKickGfx;
+    const explicitAA = gfxModel.PRESETS.indexOf(gSaved.preset) >= 0 || gfxModel.CATEGORIES.antialias.indexOf(gSaved.antialias) >= 0;
+    const antialias = !explicitAA || gfxModel.resolve(gSaved, 'balanced').antialias === 'msaa';
+    const ok = render.init(canvas, { onPick: onZonePick, onHover: onZoneHover, antialias: antialias });
     if (!ok) { ui.showCompat(); return; }
     applyVisualSettings();
     render.setTheme(currentTheme());
@@ -63,6 +68,11 @@
     wireUi();
     wireInput();
     ui.bindSettings(onSettingChange);
+    window.SpotKickGfxPanel.init({
+      lang: (navigator.languages && navigator.languages[0]) || navigator.language,
+      render: render, getSaved: ui.getGfx, save: ui.setGfx,
+      onChange: () => onSettingChange('gfx')
+    });
     platform.syncTime(); // best effort; game works offline regardless
 
     // Hosted boot: resolve the account nickname, then adopt the cloud save
@@ -130,7 +140,7 @@
 
   function applyVisualSettings() {
     const s = ui.getSettings();
-    render.setQuality(s.quality);
+    render.setGraphics(s.gfx);
     render.setReducedMotion(s.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     audio.setLevel('music', s.music / 100);
     audio.setLevel('sfx', s.sfx / 100);
@@ -139,7 +149,6 @@
   }
 
   function onSettingChange(key, value) {
-    if (key === 'quality') render.setQuality(value);
     if (key === 'theme') { render.setTheme(currentTheme()); }
     if (key === 'highContrast') render.setTheme(currentTheme());
     if (key === 'reducedMotion') applyVisualSettings();
@@ -1373,6 +1382,7 @@
     const w = window.innerWidth, h = window.innerHeight;
     render.resize(w, h, window.devicePixelRatio || 1);
     syncSafeInsets();
+    if (window.SpotKickGfxPanel) window.SpotKickGfxPanel.refreshSummary();
   }
 
   // Tell the renderer which bands of the canvas the HUD covers (status text at

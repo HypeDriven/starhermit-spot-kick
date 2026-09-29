@@ -58,7 +58,7 @@
   const SETTINGS_KEY = 'spotkick.settings.v1';
   const DEFAULTS = {
     music: 60, sfx: 80, ambience: 50, voice: 80,
-    quality: 'high', theme: 'midnight',
+    gfx: {}, theme: 'midnight', // gfx: Graphics panel state (see gfx.js); {} = Auto
     reducedMotion: false, highContrast: false, largeText: false,
     leftHanded: false, timingAssist: false, hapticsOff: false, captions: true,
     cameraPref: 'auto', tutorialDone: false
@@ -69,7 +69,9 @@
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       if (raw) settings = Object.assign({}, DEFAULTS, JSON.parse(raw));
+      delete settings.quality; // superseded by gfx
     } catch (_) { /* keep defaults */ }
+    settings.gfx = Object.assign({}, settings.gfx && typeof settings.gfx === 'object' ? settings.gfx : {});
     applySettings();
     syncSettingsInputs();
     return settings;
@@ -85,7 +87,7 @@
   function syncSettingsInputs() {
     const map = {
       'opt-music': 'music', 'opt-sfx': 'sfx', 'opt-ambience': 'ambience', 'opt-voice': 'voice',
-      'opt-quality': 'quality', 'opt-theme': 'theme',
+      'opt-theme': 'theme',
       'opt-reduced-motion': 'reducedMotion', 'opt-high-contrast': 'highContrast',
       'opt-large-text': 'largeText', 'opt-left-handed': 'leftHanded',
       'opt-timing-assist': 'timingAssist', 'opt-haptics-off': 'hapticsOff', 'opt-captions': 'captions'
@@ -116,7 +118,7 @@
     };
     wire('opt-music', 'music', e => +e.value); wire('opt-sfx', 'sfx', e => +e.value);
     wire('opt-ambience', 'ambience', e => +e.value); wire('opt-voice', 'voice', e => +e.value);
-    wire('opt-quality', 'quality'); wire('opt-theme', 'theme');
+    wire('opt-theme', 'theme');
     wire('opt-reduced-motion', 'reducedMotion', e => e.checked);
     wire('opt-high-contrast', 'highContrast', e => e.checked);
     wire('opt-large-text', 'largeText', e => e.checked);
@@ -126,6 +128,8 @@
     wire('opt-captions', 'captions', e => e.checked);
   }
   function getSettings() { return settings; }
+  function getGfx() { return settings.gfx; }
+  function setGfx(g) { settings.gfx = Object.assign({}, g); saveSettings(); }
 
   // ---------- persistent save (versioned + checksummed) ----------
   const SAVE_KEY = 'spotkick.save.v1';
@@ -311,7 +315,7 @@
     show: show, openOverlay: openOverlay, closeOverlay: closeOverlay,
     currentScreen: currentScreen, anyOverlayOpen: anyOverlayOpen,
     announce: announce, alertUser: alertUser, caption: caption,
-    loadSettings: loadSettings, saveSettings: saveSettings, getSettings: getSettings, bindSettings: bindSettings,
+    loadSettings: loadSettings, saveSettings: saveSettings, getSettings: getSettings, getGfx: getGfx, setGfx: setGfx, bindSettings: bindSettings,
     loadSave: loadSave, persistSave: persistSave, getSave: getSave, adoptSave: adoptSave,
     ACHIEVEMENTS: ACHIEVEMENTS, unlockAchievement: unlockAchievement,
     updateHud: updateHud, setPanels: setPanels, setWaitText: setWaitText, setSelection: setSelection,
