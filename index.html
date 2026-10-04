@@ -50,12 +50,15 @@
       <button type="button" data-action="practice">Practice</button>
       <button type="button" data-action="challenge">Challenge</button>
       <button type="button" data-action="learn">Learn</button>
-      <button type="button" data-action="hosted">Hosted Play</button>
+      <button type="button" id="btn-hosted" class="hidden" data-action="hosted">Online Match</button>
       <button type="button" data-action="help">Help</button>
       <button type="button" data-action="settings">Settings</button>
+      <button type="button" id="btn-signin" class="hidden" data-action="sh-signin">Sign in with StarHermit</button>
+      <button type="button" id="btn-invite" class="hidden" data-action="sh-invite">Invite a friend</button>
     </nav>
     <p id="title-profile" class="dim"></p>
   </section>
+  <p id="sh-toast" class="sh-toast hidden" role="status"></p>
 
   <!-- Mode setup -->
   <section id="screen-setup" class="screen hidden" aria-labelledby="setup-title">
@@ -214,7 +217,10 @@
 <script src="./js/gfx.js"></script>
 <script src="./js/render.js"></script>
 <script src="./js/gfxpanel.js"></script>
+<script src="./starhermit-sdk.js"></script>
+<script>StarHermit.init();</script>
 <script src="./js/platform.js"></script>
+<script src="./js/sh-strings.js"></script>
 <script src="./js/net.js"></script>
 <script src="./js/ui.js"></script>
 <script src="./js/bootstrap.js"></script>

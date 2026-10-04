@@ -44,6 +44,16 @@
 
   // ---------- accessibility mirror ----------
   function announce(text) { $('live-region').textContent = text; }
+  let toastTimer = null;
+  function toast(text) {
+    const el = $('sh-toast');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+    announce(text);
+  }
   function alertUser(text) { $('alert-region').textContent = text; }
   function caption(text) {
     const el = $('captions');
@@ -320,7 +330,7 @@
     ACHIEVEMENTS: ACHIEVEMENTS, unlockAchievement: unlockAchievement,
     updateHud: updateHud, setPanels: setPanels, setWaitText: setWaitText, setSelection: setSelection,
     setupView: setupView, renderResults: renderResults, renderHelp: renderHelp, appendBoard: appendBoard,
-    setJourneyProgress: setJourneyProgress, setProfileLine: setProfileLine,
+    setJourneyProgress: setJourneyProgress, setProfileLine: setProfileLine, toast: toast,
     setLoadingStatus: setLoadingStatus, showCompat: showCompat
   };
 });

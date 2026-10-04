@@ -169,7 +169,7 @@ Follow the skill pack's acceptance gate: deterministic seeds, debug views for co
 - `ui`: responsive DOM shell, focus, localization, settings, overlays, accessibility mirror.
 - `audio`: buses, event mapping, focus/background behavior, decode and memory policy.
 - `content`: versioned levels, themes, tutorials, validation metadata.
-- `platform`: launch-token auth + refresh, profile nicknames, cloud-save mirror, read-only platform boards, dev-server session adapter, retries, rate-limit handling, in-memory funnel.
+- `platform`: launch-token auth + refresh, profile nicknames, cloud-save mirror, read-only platform boards, realtime-rooms REST helper, retries, rate-limit handling, in-memory funnel.
 
 No module may mutate rules state except through a validated command. Rendering consumes immutable snapshots plus interpolation data. UI state and simulation state are separate so closing a drawer cannot affect a match.
 
@@ -192,13 +192,14 @@ No module may mutate rules state except through a validated command. Rendering c
 
 ### Packaging and launch
 - Ship a browser distribution with `starhermit.txt` at its root, `name=Spot Kick`, and `launch=index.html`. Keep source files, secrets, design documents, and source maps outside the uploaded distribution.
-- Read the launch token from the `#game_token=<jwt>` URL fragment once, then strip it; decode `sub` and `game_scope` from the JWT (slug never hard-coded). Query `?token=`/`?launch=` remain local-dev fallbacks. Use same-origin `/api` and `/ws` routes when hosted. Re-mint the token every 45 min via `POST /api/v1/games/{slug}/launch-token`; never persist access or launch tokens in local storage.
-- Synchronize daily boundaries with `GET /api/v1/time` (Bearer-authenticated) using a round-trip-adjusted offset, silently falling back to the local clock. Treat rate limits and structured `{"error":"..."}` responses as recoverable UI states.
+- `starhermit-sdk.js` (unmodified copy of the canonical StarHermit SDK) loads before `js/platform.js` and `StarHermit.init()` runs inline at page load: it reads `#game_token=` (library launch) or `#access_token=` (sign-in return), strips it, takes the slug from the `game_scope` claim and renews the launch token before expiry. `js/platform.js` routes platform calls through `window.StarHermit` (rooms REST and `/ws/v1/realtime` use the SDK's live token); if renewal is refused the game shows a localized notice, re-offers sign-in and keeps playing locally. Without a token no platform call is made; tokens are never persisted.
+- When signed in, synchronize daily boundaries with `GET /api/v1/time` (Bearer-authenticated) using a round-trip-adjusted offset, silently falling back to the local clock. Standalone (no launch token) uses the local clock and makes no `/api` or `/ws` requests. Treat rate limits and structured `{"error":"..."}` responses as recoverable UI states.
 
 ### Identity, profile, presence, and preferences
-- Support guest practice locally, then adopt the platform account when a launch token exists. Display name comes from `GET /api/v1/users/{userId}/profile` (nickname only, never usernames; "Player "+id8 fallback); presence heartbeats are not sent — the platform has no per-game presence endpoint.
-- Store accessibility, audio, graphics tier, tutorial completion, camera preference, and rules options through per-game settings. Declare desktop action bindings and read player overrides; touch mappings remain responsive UI controls.
-- Cloud-save progression as a versioned, checksummed document mirrored to `GET`/`PUT /api/v1/me/cloud-saves/{slug}` (one zip+base64 slot; remote wins on load; ~2 s debounced push with pagehide flush; localStorage stays the offline cache). Never place credentials or private chat in saves.
+- Guests play locally. On `*.starhermit.com` without a token the title menu shows **Sign in with StarHermit** (`StarHermit.signIn()`), hidden when signed in or running locally. Signed-in players see their profile nickname (fallback `Player <id prefix>`, never usernames) on the title line, and an **Invite a friend** menu button copies `StarHermit.inviteLink()` with a toast. These controls are localized in all 9 locales (`js/sh-strings.js`). No presence heartbeats are sent.
+- Audio levels, graphics, theme, accessibility, timing assist, haptics, captions, camera preference and tutorial completion are mirrored to the per-game settings KV on change; on start the platform values win and the Settings inputs re-sync.
+- Keyboard actions are declared as `control.*` lines in `starhermit.txt`; at start `StarHermit.loadBindings()` applies the player's overrides, keys are routed by `event.code`, and Help lists the effective keys. Touch and gamepad mappings remain in-game controls.
+- Progression is a versioned, checksummed document mirrored to cloud-save slot `game:<slug>` via the SDK (remote wins on load; ~2 s debounced push, flushed with keepalive on pagehide/hidden; localStorage stays the offline cache). Never place credentials or private chat in saves.
 
 ### Discovery, activity, and social layer
 - Launch activity start/end and per-game telemetry endpoints do not exist for launch tokens; the anonymous funnel stays an in-memory queue. Surface entitlement or catalog state only in host-owned chrome; the game itself must remain playable without promotional interruption.
@@ -208,15 +209,15 @@ No module may mutate rules state except through a validated command. Rendering c
 
 ### Achievements and leaderboards
 - Declare a small static achievement set: first completion, mechanic mastery, a sustained streak, a difficult content milestone, and an accessibility-neutral long-term goal. Keys are stable, lowercase identifiers; unlocks are idempotent and stay local (part of the cloud-saved doc) — the client has no server-authoritative unlock path.
-- Provide global and friends-filtered boards for the primary metric plus a fair daily/weekly board. Platform leaderboards are read-only to clients (`GET /api/v1/games/{slug}` → `GET /api/v1/leaderboards/{id}/entries`, nicknames resolved via the profile route); personal bests stay local + cloud-saved. The repo's own dev server additionally validates replay submissions (ruleset, content version, seed, assists, duration, impossible/stale scores) for local play only.
+- Provide global and friends-filtered boards for the primary metric plus a fair daily/weekly board. Platform leaderboards are read-only to clients (`StarHermit.leaderboards()` → `leaderboardEntries()`, nicknames resolved via the profile); personal bests stay local + cloud-saved. Clients never submit scores to any server.
 - Competitive outcomes, rating changes, and achievement unlocks are server-authoritative. Never accept a client-supplied winner, score, hidden state, or elapsed time as truth.
 
 ### Sessions and transport
-- Use realtime rooms for hosted matches: REST lobby (create / quick-join / open / result / leave / mine) plus a `/ws/v1/realtime` binary transport (16-byte sender prefix, 8 KB frames, guest ready-only text). The host applies every command through the same validated rules engine the dev server uses, hides the committed dive from shooters, broadcasts snapshots with kick-resolved events, and posts the room result; guests reconnect via `GET /rooms/mine` + ready and receive a fresh snapshot.
+- Use realtime rooms for hosted matches (the **Online Match** entry is shown only when signed in; standalone has no online play): REST lobby (create / quick-join / open / result / leave / mine) plus a `/ws/v1/realtime` binary transport (16-byte sender prefix, 8 KB frames, guest ready-only text). The host applies every command through the same validated rules engine the dev server uses, hides the committed dive from shooters, broadcasts snapshots with kick-resolved events, and posts the room result; guests reconnect via `GET /rooms/mine` + ready and receive a fresh snapshot.
 - The repo's `server.js` remains a local-dev backend only (its session/leaderboard REST routes are never called on-platform); it is not a sandboxed Jint Game Script, so no script-owned achievements run server-side.
 
 ### Publishing and operations
-- `server.js` ships in the distribution and is declared with `server=server.js`, but it is a standalone Node dev server (static + local session/leaderboard REST), not a platform game script; hosted play on StarHermit is rooms-based and client-authoritative-host. Choose a digest-pinned container only if profiling proves the sandbox unsuitable; no initial design here requires one.
+- `server.js` ships in the distribution and is declared with `server=server.js`, but it is a standalone Node dev server (static + legacy session/leaderboard REST the client no longer calls), not a platform game script; hosted play on StarHermit is rooms-based and client-authoritative-host. Choose a digest-pinned container only if profiling proves the sandbox unsuitable; no initial design here requires one.
 - Define control defaults, achievement metadata, and versioned settings before release. Publish immutable build assets, verify the launch path, maintain migration tests for saves, and expose no secret configuration to the client.
 - Capture anonymous funnel events only for start, tutorial step, round end, retry, settings change, and error category. Avoid raw text, precise personal data, and cross-title tracking.
 

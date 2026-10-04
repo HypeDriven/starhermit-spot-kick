@@ -19,11 +19,9 @@
  * buttons, or real canvas taps. No game code is modified.
  *
  * Serving: the game is a fully self-contained Three.js SPA and plays
- * offline (platform.syncTime / hosted API simply degrade to the local
- * guest path when the backend is absent — see platform.js). Per test
- * convention this embeds a minimal node:http static server and answers
- * /api/* probes with 200 `{}` so the client stays on its offline path
- * with zero console noise. The repo's authoritative server.js is not used.
+ * offline. Without a launch token it makes no own-server calls, so this
+ * embeds a minimal node:http static server (no /api routes) and fails on
+ * any same-origin /api or /ws request. The repo's server.js is not used.
  *
  * Run: npm run test:e2e  (or: node tests/e2e.mjs)
  */
@@ -59,13 +57,6 @@ const server = http.createServer(async (req, res) => {
   try {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p === '/') p = '/index.html';
-    // No StarHermit backend here: answer API probes with empty JSON so the
-    // platform adapter degrades to its offline path without console noise.
-    if (p.startsWith('/api/')) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('{}');
-      return;
-    }
     const file = path.normalize(path.join(ROOT, p));
     if (!file.startsWith(ROOT)) { res.writeHead(403).end('forbidden'); return; }
     const data = await readFile(file);
@@ -77,6 +68,14 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}`;
+
+// Standalone (no launch token) must make zero same-origin /api or /ws requests.
+function watchOwnServer(page, errors) {
+  page.on('request', (req) => {
+    const u = new URL(req.url());
+    if (u.origin === BASE && /^\/(api|ws)(\/|$)/.test(u.pathname)) errors.push(`own-server request: ${req.method()} ${u.pathname}`);
+  });
+}
 
 let failures = 0;
 const ok = (name) => console.log(`ok - ${name}`);
@@ -162,15 +161,16 @@ async function runPass(browser, name, ctxOpts, { full }) {
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  watchOwnServer(page, errors);
   page.on('console', (m) => {
     if (m.type() !== 'error' || browserNoise.test(m.text())) return;
     const url = m.location()?.url || '';
-    if (/Failed to load resource/.test(m.text()) && /\/api\/|\/favicon/.test(url)) return;
+    if (/Failed to load resource/.test(m.text()) && /\/favicon/.test(url)) return;
     errors.push(`console: ${m.text()}`);
   });
   page.on('response', (r) => {
     const p = r.url();
-    if (r.status() >= 400 && !/\/api\/|\/favicon/.test(p)) errors.push(`http ${r.status()}: ${p}`);
+    if (r.status() >= 400 && !/\/favicon/.test(p)) errors.push(`http ${r.status()}: ${p}`);
   });
 
   try {
@@ -307,15 +307,16 @@ async function runMobile(browser, name) {
   });
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  watchOwnServer(page, errors);
   page.on('console', (m) => {
     if (m.type() !== 'error' || browserNoise.test(m.text())) return;
     const url = m.location()?.url || '';
-    if (/Failed to load resource/.test(m.text()) && /\/api\/|\/favicon/.test(url)) return;
+    if (/Failed to load resource/.test(m.text()) && /\/favicon/.test(url)) return;
     errors.push(`console: ${m.text()}`);
   });
   page.on('response', (r) => {
     const p = r.url();
-    if (r.status() >= 400 && !/\/api\/|\/favicon/.test(p)) errors.push(`http ${r.status()}: ${p}`);
+    if (r.status() >= 400 && !/\/favicon/.test(p)) errors.push(`http ${r.status()}: ${p}`);
   });
 
   try {
@@ -391,10 +392,11 @@ async function runGraphics(browser, name, ctxOpts) {
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  watchOwnServer(page, errors);
   page.on('console', (m) => {
     if ((m.type() !== 'error' && m.type() !== 'warning') || browserNoise.test(m.text())) return;
     const url = m.location()?.url || '';
-    if (/Failed to load resource/.test(m.text()) && /\/api\/|\/favicon/.test(url)) return;
+    if (/Failed to load resource/.test(m.text()) && /\/favicon/.test(url)) return;
     errors.push(`console ${m.type()}: ${m.text()}`);
   });
   const tap = async (sel) => (ctxOpts.hasTouch ? page.tap(sel) : page.click(sel));
