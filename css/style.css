@@ -22,6 +22,10 @@ body {
 }
 
 #app { position: fixed; inset: 0; overflow: hidden; }
+/* Large screens: ui-scale.js sets --ui-scale (1 up to 1600x1000). Every DOM
+   layer above the full-viewport canvas zooms by it (the canvas does not), and
+   vw/vh lengths inside them are divided by it. */
+#status-bar, .screen, .overlay, #compat-message, #fps-meter, #captions, .sh-toast { zoom: var(--ui-scale, 1); }
 #game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 .visually-hidden {
@@ -67,23 +71,27 @@ button + button { margin-left: 8px; }
   overflow-y: auto; text-align: center;
 }
 /* tall content scrolls from the top instead of being centred off-screen */
-.overlay { justify-content: flex-start; }
-.overlay > :first-child { margin-top: auto; }
-.overlay > :last-child { margin-bottom: auto; }
+.overlay, .screen:not(.play) { justify-content: flex-start; }
+.overlay > :first-child, .screen:not(.play) > :first-child { margin-top: auto; }
+.overlay > :last-child, .screen:not(.play) > :last-child { margin-bottom: auto; }
+/* overlays stack over the title/HUD: an opaque backdrop keeps the screen
+   underneath from bleeding through the panel text */
+.overlay { background: rgb(6, 11, 22); backdrop-filter: none; }
+body.high-contrast .overlay { background: #000; }
 .screen.play { background: transparent; backdrop-filter: none; pointer-events: none; justify-content: space-between; }
 .screen.play > * { pointer-events: auto; }
 
-.title-name { font-size: clamp(34px, 7vw, 64px); letter-spacing: 6px; color: #fff; text-shadow: 0 0 22px rgba(90,160,255,.4); }
+.title-name { font-size: clamp(34px, calc(7vw / var(--ui-scale, 1)), 64px); letter-spacing: 6px; color: #fff; text-shadow: 0 0 22px rgba(90,160,255,.4); }
 .subtitle { opacity: 0.8; margin-bottom: 12px; }
 
-.menu-buttons { display: flex; flex-direction: column; gap: 8px; width: min(78vw, 340px); }
+.menu-buttons { display: flex; flex-direction: column; gap: 8px; width: min(calc(78vw / var(--ui-scale, 1)), 340px); }
 .menu-buttons button { font-size: 18px; }
 
 .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 #setup-body { max-width: 70ch; width: 100%; }
 #setup-rules { max-width: 70ch; }
-.stage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; max-height: 45vh; overflow-y: auto; padding: 4px; }
+.stage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; max-height: calc(45vh / var(--ui-scale, 1)); overflow-y: auto; padding: 4px; }
 .stage-grid button { font-size: 14px; padding: 8px; white-space: normal; }
 .stage-grid button.done { background: #1e5c43; }
 .stage-grid button.locked { opacity: 0.4; }
@@ -103,14 +111,14 @@ button + button { margin-left: 8px; }
 #panel-shoot, #panel-dive, #panel-wait {
   background: var(--panel); border-radius: 14px; padding: 12px 16px;
   display: flex; flex-direction: column; gap: 8px; align-items: center;
-  max-width: min(92vw, 420px);
+  max-width: min(calc(92vw / var(--ui-scale, 1)), 420px);
 }
 /* Wide enough viewports: zone grid beside the curve/timing controls keeps the
    tray short so the goal stays framed above it */
 @media (min-width: 560px) {
   #panel-shoot, #panel-dive {
     display: grid; grid-template-columns: auto auto; column-gap: 14px; row-gap: 6px;
-    align-items: center; justify-items: center; max-width: min(92vw, 520px);
+    align-items: center; justify-items: center; max-width: min(calc(92vw / var(--ui-scale, 1)), 520px);
   }
   #panel-shoot .panel-label, #panel-dive .panel-label { grid-column: 1 / -1; margin: 0; }
   #panel-shoot .zone-grid, #panel-dive .zone-grid { grid-row: span 3; }
@@ -129,7 +137,7 @@ button + button { margin-left: 8px; }
 #hud-actions button { background: rgba(30,45,70,0.85); }
 
 /* Settings */
-.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; width: min(92vw, 780px); text-align: left; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; width: min(calc(92vw / var(--ui-scale, 1)), 780px); text-align: left; }
 fieldset { border: 1px solid #2a3a55; border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
 legend { padding: 0 6px; opacity: 0.85; }
 fieldset label { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 15px; }
@@ -150,8 +158,9 @@ select { font: inherit; background: #1a2942; color: var(--text); border: 1px sol
 .help-card h3 { margin-bottom: 4px; }
 
 /* Captions */
+/* sits above the shot/dive tray (--caption-lift is set from the HUD layout) */
 #captions {
-  position: absolute; bottom: calc(12px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: calc(12px + var(--safe-bottom) + var(--caption-lift, 0px)); left: 50%; transform: translateX(-50%);
   background: rgba(0,0,0,0.75); padding: 4px 12px; border-radius: 6px; font-size: 14px; z-index: 9;
 }
 
@@ -182,8 +191,8 @@ body.high-contrast button { border: 2px solid #fff; }
 /* Portrait mobile: bottom thumb-zone tray */
 @media (max-width: 700px) and (orientation: portrait) {
   #hud-controls { padding-bottom: calc(16px + var(--safe-bottom)); }
-  #panel-shoot, #panel-dive { width: 94vw; max-width: 94vw; }
-  .menu-buttons { width: 88vw; }
+  #panel-shoot, #panel-dive { width: calc(94vw / var(--ui-scale, 1)); max-width: calc(94vw / var(--ui-scale, 1)); }
+  .menu-buttons { width: calc(88vw / var(--ui-scale, 1)); }
   .settings-grid { grid-template-columns: 1fr; }
 }
 /* Landscape mobile: narrow status rail, ≥44px targets with 8px separation */
@@ -216,7 +225,7 @@ fieldset label.check { justify-content: flex-start; }
 .gfx-summary { font-size: 13px; opacity: 0.8; overflow-wrap: anywhere; }
 .gfx-note { font-size: 13px; color: #ffd08a; }
 @media (min-width: 1024px) {
-  .settings-grid { width: min(94vw, 1040px); grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); }
+  .settings-grid { width: min(calc(94vw / var(--ui-scale, 1)), 1040px); grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); }
   .settings-grid .gfx-fieldset { grid-row: span 2; }
 }
 
@@ -226,4 +235,4 @@ fieldset label.check { justify-content: flex-start; }
   pointer-events: none; font: 12px/1.3 ui-monospace, monospace; color: #cfe0ff;
   background: rgba(5,9,18,0.6); padding: 2px 6px; border-radius: 4px;
 }
-.sh-toast { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90; max-width: min(92vw, 520px); margin: 0; padding: 10px 16px; border-radius: 10px; background: rgba(12, 20, 32, .94); color: #f3f6fa; font-size: 14px; text-align: center; overflow-wrap: anywhere; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+.sh-toast { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90; max-width: min(calc(92vw / var(--ui-scale, 1)), 520px); margin: 0; padding: 10px 16px; border-radius: 10px; background: rgba(12, 20, 32, .94); color: #f3f6fa; font-size: 14px; text-align: center; overflow-wrap: anywhere; box-shadow: 0 6px 20px rgba(0,0,0,.4); }

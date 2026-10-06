@@ -344,7 +344,7 @@
       case 'learn': startLearn(); break;
       case 'hosted': setupHosted(); break;
       case 'help': ui.renderHelp(keyboardBindings()); ui.openOverlay('overlay-help'); audio.event('ui-confirm'); break;
-      case 'settings': ui.openOverlay('overlay-pause'); break;
+      case 'settings': labelPauseOverlay(false); ui.openOverlay('overlay-pause'); break;
       case 'sh-signin': platform.signIn(); break;
       case 'sh-invite': copyInvite(); break;
       case 'start-match': startConfiguredMatch(); break;
@@ -1225,9 +1225,18 @@
     G.paused = true;
     G.pausedAt = performance.now();
     setAppState('paused');
+    labelPauseOverlay(true);
     ui.openOverlay('overlay-pause');
     ui.announce('Paused.');
     audio.event('ui-back');
+  }
+  // The pause overlay doubles as the title's Settings screen: name it for what
+  // it is and hide the match-only action when no match is running.
+  function labelPauseOverlay(paused) {
+    const ov = document.getElementById('overlay-pause');
+    document.getElementById('pause-heading').textContent = paused ? 'Paused' : 'Settings';
+    ov.querySelector('[data-action="resume"]').textContent = paused ? 'Resume' : 'Back';
+    ov.querySelector('[data-action="leave"]').classList.toggle('hidden', !paused);
   }
   function resume() {
     if (!G.paused) { ui.closeOverlay('overlay-pause'); return; } // settings opened from title
@@ -1344,6 +1353,9 @@
       }
     }
     render.setSafeInsets(ins);
+    // keep captions clear of the tray (bottom is in the zoomed layer's px)
+    const zoom = (window.UIScale && window.UIScale.value) || 1;
+    document.documentElement.style.setProperty('--caption-lift', (ins.bottom ? ins.bottom / zoom : 0) + 'px');
   }
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver(() => syncSafeInsets());

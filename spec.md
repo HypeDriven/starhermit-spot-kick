@@ -76,6 +76,7 @@ The Three.js canvas fills the game region but is never the only UI. Menus, text,
 - **Compact desktop/tablet:** playfield remains central; secondary rails collapse into drawers. Pointer hover may preview but never be required.
 - **Portrait mobile:** top safe-area status bar, square or perspective-fit playfield, bottom thumb-zone action tray, and sheet-based secondary panels. Never place critical controls under browser chrome or display cutouts.
 - **Landscape mobile:** reserve a narrow status rail; preserve at least 44×44 CSS-pixel targets and 8-pixel separation. Shot and dive panels carry a visible six-button goal-zone grid (44px) mirroring the 3D pick planes, which are double-sided so both the shooter and keeper cameras can pick them; the camera is fitted so the whole goal sits inside the canvas area not covered by the HUD (view offset), pulling back on narrow aspects. In short landscape the tray is a narrow left column and the actions a right column with the goal framed between them.
+- **Large screens (above 1600×1000):** the shared `ui-scale.js` sets `--ui-scale` (`min(w/1600, h/1000)`, capped at 2.5); the status bar, screens, overlays, captions, toast and frame-rate readout zoom by it with their vw/vh lengths divided by it, while the full-viewport WebGL canvas stays unzoomed and the camera frames the goal between the (larger) HUD bands. Screens taller than the viewport scroll from the top; captions sit just above the shot/dive tray.
 - React to resize, orientation, device-pixel-ratio, safe-area insets, virtual keyboard, and visibility changes without losing input or restarting the round.
 
 ### Screens and overlays
@@ -83,7 +84,7 @@ The Three.js canvas fills the game region but is never the only UI. Menus, text,
 - **Title/home:** Play is dominant; daily challenge, journey progress, and profile are one level below.
 - **Mode setup:** show rules, expected duration, player count, assists, and whether the result is ranked before commitment.
 - **Play HUD:** objective, progress, current actor/state, pause, and only context-relevant actions.
-- **Pause/settings:** resume first; audio, graphics, controls, accessibility, help, and leave are clearly separated.
+- **Pause/settings:** resume first; audio, graphics, controls, accessibility, help, and leave are clearly separated. The same opaque overlay opens from the title as **Settings** with a **Back** button and no Leave match action.
 - **Results:** outcome headline, score breakdown, progress, achievements, comparison, replay/retry, and next recommended action.
 - **Help:** visual rule cards generated from current control mappings and representative legal states.
 - Lobby, roster, readiness, invitation, reconnect, result, and report states are first-class screens.
