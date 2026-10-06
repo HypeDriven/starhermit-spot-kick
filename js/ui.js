@@ -23,12 +23,14 @@
     SCREENS.forEach(s => $(s).classList.toggle('hidden', s !== id));
     OVERLAYS.forEach(o => $(o).classList.add('hidden'));
     $('status-bar').classList.toggle('hidden', id !== 'screen-play');
+    $(id).scrollTop = 0; // hidden screens keep their scroll; reopen at the top
     const first = $(id).querySelector('button:not([disabled])');
     if (first) first.focus({ preventScroll: true });
   }
   function openOverlay(id) {
     lastFocus = document.activeElement;
     $(id).classList.remove('hidden');
+    $(id).scrollTop = 0;
     const first = $(id).querySelector('button:not([disabled]), input, select');
     if (first) first.focus({ preventScroll: true });
   }

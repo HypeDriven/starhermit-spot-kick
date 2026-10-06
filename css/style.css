@@ -208,6 +208,13 @@ body.high-contrast button { border: 2px solid #fff; }
   .seg button { padding: 6px 8px; font-size: 13px; min-height: 40px; }
   #shoot-selection, #dive-selection { font-size: 12px; margin: 0; }
   #btn-confirm-shot, #btn-confirm-dive { font-size: 15px; padding: 8px 22px; min-height: 40px; }
+  /* the title menu fits a short phone screen: compact heading, 3-column menu */
+  #screen-title { gap: 6px; padding-top: calc(12px + var(--safe-top)); padding-bottom: calc(12px + var(--safe-bottom)); }
+  #screen-title .title-name { font-size: 34px; margin: 0; }
+  #screen-title .subtitle { margin: 0 0 4px; }
+  #screen-title .menu-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(calc(92vw / var(--ui-scale, 1)), 640px); }
+  #screen-title .menu-buttons button { margin: 0; font-size: 16px; padding-top: 8px; padding-bottom: 8px; }
+  #screen-title #title-profile { margin: 0; }
 }
 /* Left-handed: mirror the action tray */
 body.left-handed #hud-controls { align-items: flex-start; }
