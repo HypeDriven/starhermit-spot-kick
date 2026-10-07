@@ -15,7 +15,11 @@
     expiredTitle: 'Your session expired',
     expiredBody: 'Your StarHermit session ended, so the match connection stopped. Go back to StarHermit to start a fresh session.',
     relaunch: 'Back to StarHermit',
-    playLocal: 'Play on this device'
+    playLocal: 'Play on this device',
+    lbPosting: 'Posting score to the leaderboard…',
+    lbRank: 'Leaderboard rank: #{rank}',
+    lbPosted: 'Score posted to the leaderboard.',
+    lbFailed: 'Score not posted to the leaderboard.'
   };
   const ES = {
     signIn: 'Iniciar sesión con StarHermit',
@@ -26,7 +30,11 @@
     expiredTitle: 'Tu sesión expiró',
     expiredBody: 'Tu sesión de StarHermit terminó y se detuvo la conexión con el partido. Vuelve a StarHermit para iniciar una nueva sesión.',
     relaunch: 'Volver a StarHermit',
-    playLocal: 'Jugar en este dispositivo'
+    playLocal: 'Jugar en este dispositivo',
+    lbPosting: 'Publicando la puntuación en la clasificación…',
+    lbRank: 'Puesto en la clasificación: #{rank}',
+    lbPosted: 'Puntuación publicada en la clasificación.',
+    lbFailed: 'No se publicó la puntuación en la clasificación.'
   };
   const FR = {
     signIn: 'Se connecter avec StarHermit',
@@ -37,7 +45,11 @@
     expiredTitle: 'Votre session a expiré',
     expiredBody: 'Votre session StarHermit est terminée, la connexion au match a donc été interrompue. Retournez sur StarHermit pour démarrer une nouvelle session.',
     relaunch: 'Retour à StarHermit',
-    playLocal: 'Jouer sur cet appareil'
+    playLocal: 'Jouer sur cet appareil',
+    lbPosting: 'Envoi du score au classement…',
+    lbRank: 'Rang au classement : #{rank}',
+    lbPosted: 'Score envoyé au classement.',
+    lbFailed: 'Score non envoyé au classement.'
   };
   const STRINGS = {
     'en-US': EN, 'en-GB': EN, 'es-419': ES, 'es-ES': ES,
@@ -50,10 +62,14 @@
       expiredTitle: 'Deine Sitzung ist abgelaufen',
       expiredBody: 'Deine StarHermit-Sitzung ist beendet, daher wurde die Verbindung zum Spiel getrennt. Kehre zu StarHermit zurück, um eine neue Sitzung zu starten.',
       relaunch: 'Zurück zu StarHermit',
-      playLocal: 'Auf diesem Gerät spielen'
+      playLocal: 'Auf diesem Gerät spielen',
+      lbPosting: 'Punktzahl wird in die Bestenliste eingetragen…',
+      lbRank: 'Platz in der Bestenliste: #{rank}',
+      lbPosted: 'Punktzahl in die Bestenliste eingetragen.',
+      lbFailed: 'Punktzahl nicht in die Bestenliste eingetragen.'
     },
     'fr-FR': FR,
-    'fr-CA': Object.assign({}, FR, { invite: 'Inviter un ami ou une amie' }),
+    'fr-CA': Object.assign({}, FR, { invite: 'Inviter un ami ou une amie', lbPosting: 'Envoi du pointage au classement…', lbPosted: 'Pointage envoyé au classement.', lbFailed: 'Pointage non envoyé au classement.' }),
     'pt-BR': {
       signIn: 'Entrar com StarHermit',
       invite: 'Convidar um amigo',
@@ -63,7 +79,11 @@
       expiredTitle: 'Sua sessão expirou',
       expiredBody: 'Sua sessão do StarHermit terminou e a conexão com a partida foi interrompida. Volte ao StarHermit para iniciar uma nova sessão.',
       relaunch: 'Voltar ao StarHermit',
-      playLocal: 'Jogar neste dispositivo'
+      playLocal: 'Jogar neste dispositivo',
+      lbPosting: 'Enviando a pontuação para o ranking…',
+      lbRank: 'Posição no ranking: #{rank}',
+      lbPosted: 'Pontuação enviada para o ranking.',
+      lbFailed: 'Pontuação não enviada para o ranking.'
     },
     'it-IT': {
       signIn: 'Accedi con StarHermit',
@@ -74,7 +94,11 @@
       expiredTitle: 'La tua sessione è scaduta',
       expiredBody: 'La tua sessione StarHermit è terminata, quindi la connessione alla partita si è interrotta. Torna su StarHermit per avviare una nuova sessione.',
       relaunch: 'Torna a StarHermit',
-      playLocal: 'Gioca su questo dispositivo'
+      playLocal: 'Gioca su questo dispositivo',
+      lbPosting: 'Invio del punteggio alla classifica…',
+      lbRank: 'Posizione in classifica: #{rank}',
+      lbPosted: 'Punteggio inviato alla classifica.',
+      lbFailed: 'Punteggio non inviato alla classifica.'
     }
   };
   function strings(lang) {

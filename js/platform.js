@@ -306,6 +306,19 @@
     relaunch: function () { const sh = SH(); return !!(sh && sh.relaunch()); },
     inviteLink: function () { return hosted() ? SH().inviteLink() : null; },
     fetchPlatformLeaderboard: fetchPlatformLeaderboard,
+    /** Post a finished match's goals to the `goals` board (score-script.js);
+     *  resolves { posted, rank } — rank on that board, or null. */
+    submitScore: function (goals) {
+      if (!hosted()) return Promise.resolve({ posted: false, rank: null });
+      const sh = SH();
+      return sh.submitScores({ goals: goals }).then(function (keys) {
+        if (keys.indexOf('goals') < 0) return { posted: false, rank: null };
+        return sh.leaderboard('goals', { pageSize: 100 }).then(function (r) {
+          const me = (r.items || []).filter(function (i) { return i.userId === sh.userId; })[0];
+          return { posted: true, rank: me ? me.rank : null };
+        }, function () { return { posted: true, rank: null }; });
+      });
+    },
     _fetchJson: fetchJson
   };
 });

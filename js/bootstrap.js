@@ -1172,7 +1172,24 @@
       extra: 'Replay verified: ' + (verify.ok ? 'yes' : 'NO — ' + verify.reason) +
         ' · final hash ' + rules.hashState(st)
     });
+    postToLeaderboard(st.scoreA);
     setAppState('progression');
+  }
+
+  // Hosted play only: post a finished match against the AI (Quick Match,
+  // Journey, Daily — not hot-seat, Learn or online) to the platform `goals`
+  // board and show the player's rank on the results screen.
+  function postToLeaderboard(goals) {
+    if (!platform.hosted() || G.hotseat || ['play', 'journey', 'daily'].indexOf(G.mode) < 0) return;
+    const match = G.match;
+    const line = ui.el('p', null, SH_TEXT.lbPosting);
+    line.id = 'results-lb';
+    line.setAttribute('aria-live', 'polite');
+    ui.$('results-body').appendChild(line);
+    platform.submitScore(goals).then(function (r) {
+      if (G.match !== match) return;
+      line.textContent = !r.posted ? SH_TEXT.lbFailed : r.rank ? SH_TEXT.lbRank.replace('{rank}', r.rank) : SH_TEXT.lbPosted;
+    });
   }
 
   function stageGoalMet(stg, st) {
