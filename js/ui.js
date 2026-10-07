@@ -14,7 +14,7 @@
 
   const $ = (id) => document.getElementById(id);
   const SCREENS = ['screen-loading', 'screen-title', 'screen-setup', 'screen-play', 'screen-results'];
-  const OVERLAYS = ['overlay-pause', 'overlay-help'];
+  const OVERLAYS = ['overlay-pause', 'overlay-help', 'overlay-expired'];
 
   let lastFocus = null;
 

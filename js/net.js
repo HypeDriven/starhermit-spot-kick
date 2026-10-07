@@ -40,7 +40,8 @@
      * @param platform SpotKickPlatform (token, gameSlug, profileFor)
      * @param hooks    { rules, session, build, contentVersion, onEvent }
      *                 onEvent(op, msg) receives: open, peer-joined, peer-left,
-     *                 start, snap, cmd-rejected, result, error, disconnected.
+     *                 start, snap, cmd-rejected, result, error, disconnected,
+     *                 auth-lost (token renewal refused; reconnecting stopped).
      */
     constructor(platform, hooks) {
       this.platform = platform;
@@ -59,6 +60,7 @@
       this._guestSender = null;     // participant id prefix of the seated guest
       this._guestSeen = false;      // a guest has been seated this match
       this._sawHost = false;
+      this.renewing = false;        // true while renewing the token before a reconnect
     }
 
     _emit(op, msg) { if (this.hooks.onEvent) this.hooks.onEvent(op, msg || {}); }
@@ -143,7 +145,15 @@
       if (this.closed) return;
       if (this._reconnects >= 5) return this._emit('disconnected', {});
       const delay = Math.min(8000, 500 * Math.pow(2, this._reconnects++));
-      setTimeout(() => {
+      setTimeout(async () => {
+        // A failed reconnect may be an expired launch token (refused before
+        // the upgrade, seen only as 1006): renew first, then rebuild the URL
+        // from the current token. 'retry' backs off without reopening the old
+        // URL; 'relaunch' means the token is dead — stop for good.
+        const renewal = await this._renewForReconnect();
+        if (this.closed || !this.roomId) return;
+        if (renewal === 'relaunch') return this._authLost();
+        if (renewal !== 'renewed') return this._scheduleReconnect();
         this.platform._fetchJson('/realtime/rooms/mine', {}, 0)
           .then(async (res) => {
             if (!res.ok) throw new Error('rooms-mine-failed');
@@ -156,6 +166,22 @@
           })
           .catch(() => this._scheduleReconnect());
       }, delay);
+    }
+
+    async _renewForReconnect() {
+      this.renewing = true;
+      try { return await this.platform.renewForReconnect(); } catch (_) { return 'retry'; } finally { this.renewing = false; }
+    }
+
+    /** Renewal refused: drop the room locally (REST would 401) and surface relaunch. */
+    _authLost() {
+      this.closed = true;
+      this.hostMatch = null;
+      this.roomId = null;
+      this._guestSender = null;
+      try { if (this.ws) this.ws.close(); } catch (_) { /* already closed */ }
+      this.ws = null;
+      this._emit('auth-lost', {});
     }
 
     _sendControl(obj) {

@@ -142,3 +142,89 @@ describe('platform adapter over the StarHermit SDK', () => {
     expect(loadPlatform(sh).canSignIn()).toBe(true);
   });
 });
+
+describe('rooms reconnect renews the launch token first', () => {
+  const TOKEN2 = b64u({ alg: 'none' }) + '.' + b64u({ sub: USER, game_scope: SLUG, exp: Math.floor(Date.now() / 1000) + 7200 }) + '.sig';
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let sockets;
+  class MockWS {
+    constructor(url) { this.url = url; this.readyState = 0; sockets.push(this); queueMicrotask(() => { this.readyState = 1; this.onopen && this.onopen(); }); }
+    send() {}
+    close() { this.readyState = 3; this.onclose && this.onclose({ code: 1006 }); }
+  }
+  afterEach(() => { delete global.StarHermit; delete global.fetch; delete global.WebSocket; delete global.location; });
+
+  async function hostedRoom(renewStatus, renewBody) {
+    sockets = [];
+    const calls = [];
+    const sdkFetch = async (url, init = {}) => {
+      calls.push(url);
+      if (url.endsWith('/launch-token')) return res(renewStatus, renewBody);
+      return res(404);
+    };
+    global.fetch = async (url, init = {}) => {
+      calls.push(url);
+      if (url === '/api/v1/realtime/rooms' && init.method === 'POST') return res(200, { id: 'room-1' });
+      if (url === '/api/v1/realtime/rooms/room-1/open') return res(200, {});
+      if (url === '/api/v1/realtime/rooms/mine') return res(200, { roomId: 'room-1' });
+      return res(404);
+    };
+    global.WebSocket = MockWS;
+    global.location = { protocol: 'https:', host: 'spot-kick.starhermit.com' };
+    const sh = SDK.create({ window: win('#game_token=' + TOKEN), fetch: sdkFetch, setTimeout: () => 0, clearTimeout() {} });
+    sh.init();
+    const p = loadPlatform(sh);
+    const { RoomsClient } = require('../js/net.js');
+    const events = [];
+    const c = new RoomsClient(p, { rules: {}, session: {}, onEvent: (op) => events.push(op) });
+    await c.createRoom();
+    return { p, c, calls, events, first: sockets[0] };
+  }
+
+  test('reconnect renews first and reopens with the new token', async () => {
+    const { c, calls, first } = await hostedRoom(200, { token: TOKEN2 });
+    expect(first.url).toContain('access_token=' + encodeURIComponent(TOKEN));
+    first.close();
+    await wait(700);
+    const renewAt = calls.findIndex((u) => u.endsWith('/launch-token'));
+    const mineAt = calls.indexOf('/api/v1/realtime/rooms/mine');
+    expect(renewAt).toBeGreaterThanOrEqual(0);
+    expect(mineAt).toBeGreaterThan(renewAt);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1].url).toContain('access_token=' + encodeURIComponent(TOKEN2));
+    c.leave();
+  });
+
+  test("'retry' backs off without reopening the old URL", async () => {
+    const { c, calls, first } = await hostedRoom(503, null);
+    first.close();
+    await wait(700);
+    expect(calls.filter((u) => u.endsWith('/launch-token'))).toHaveLength(1);
+    expect(sockets).toHaveLength(1);
+    expect(calls).not.toContain('/api/v1/realtime/rooms/mine');
+    expect(c.roomId).toBe('room-1');
+    await wait(1100); // second backoff (1 s): renews again, still no reopen
+    expect(calls.filter((u) => u.endsWith('/launch-token'))).toHaveLength(2);
+    expect(sockets).toHaveLength(1);
+    c.leave();
+  });
+
+  test("'relaunch' stops reconnecting and surfaces auth-lost", async () => {
+    const { p, c, events, first } = await hostedRoom(401, null);
+    first.close();
+    await wait(700);
+    expect(events).toContain('auth-lost');
+    expect(c.roomId).toBeNull();
+    expect(p.hosted()).toBe(false);
+    expect(typeof p.relaunch).toBe('function');
+    await wait(1200);
+    expect(sockets).toHaveLength(1);
+  });
+
+  test('session-expired strings exist in every locale', () => {
+    const { STRINGS } = require('../js/sh-strings.js');
+    for (const [loc, t] of Object.entries(STRINGS)) {
+      for (const k of ['expiredTitle', 'expiredBody', 'relaunch', 'playLocal']) expect([loc, k, !!t[k]]).toEqual([loc, k, true]);
+    }
+  });
+});

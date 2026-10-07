@@ -195,6 +195,14 @@
     </div>
   </section>
 
+  <!-- Session expired (launch token could not be renewed) -->
+  <section id="overlay-expired" class="overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="expired-heading" aria-describedby="expired-body">
+    <h2 id="expired-heading">Your session expired</h2>
+    <p id="expired-body"></p>
+    <button type="button" data-action="sh-relaunch" id="btn-relaunch">Back to StarHermit</button>
+    <button type="button" data-action="expired-close" id="btn-expired-local">Play on this device</button>
+  </section>
+
   <!-- Help -->
   <section id="overlay-help" class="overlay hidden" aria-labelledby="help-heading">
     <h2 id="help-heading">How to play</h2>

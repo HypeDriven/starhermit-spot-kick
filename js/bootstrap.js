@@ -145,8 +145,14 @@
   function wireAccount() {
     document.getElementById('btn-signin').textContent = SH_TEXT.signIn;
     document.getElementById('btn-invite').textContent = SH_TEXT.invite;
+    document.getElementById('expired-heading').textContent = SH_TEXT.expiredTitle;
+    document.getElementById('expired-body').textContent = SH_TEXT.expiredBody;
+    document.getElementById('btn-relaunch').textContent = SH_TEXT.relaunch;
+    document.getElementById('btn-expired-local').textContent = SH_TEXT.playLocal;
     platform.onSignedOut(() => {
-      ui.toast(SH_TEXT.signedOut);
+      // A refused renewal before a room reconnect shows the expired overlay instead.
+      const renewing = G.hosted && G.hosted.client && G.hosted.client.renewing;
+      if (!renewing) ui.toast(SH_TEXT.signedOut);
       refreshAccount();
       if (G.appState === 'title') ui.setProfileLine(profileLine());
     });
@@ -347,6 +353,8 @@
       case 'settings': labelPauseOverlay(false); ui.openOverlay('overlay-pause'); break;
       case 'sh-signin': platform.signIn(); break;
       case 'sh-invite': copyInvite(); break;
+      case 'sh-relaunch': if (!platform.relaunch()) ui.toast(SH_TEXT.signedOut); break;
+      case 'expired-close': ui.closeOverlay('overlay-expired'); break;
       case 'start-match': startConfiguredMatch(); break;
       case 'back-to-menu': leaveToTitle(); break;
       case 'pause': pause(); break;
@@ -588,6 +596,12 @@
       case 'disconnected':
         ui.alertUser('Connection to the match was lost.');
         leaveToTitle();
+        break;
+      case 'auth-lost':
+        // Launch token dead: reconnecting stopped; offer a fresh launch.
+        leaveToTitle();
+        ui.alertUser(SH_TEXT.expiredTitle);
+        ui.openOverlay('overlay-expired');
         break;
     }
   }

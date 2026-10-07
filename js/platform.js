@@ -300,6 +300,10 @@
     loadControls: loadControls, actionFor: actionFor, keyLabel: keyLabel, DEFAULT_CONTROLS: DEFAULT_CONTROLS,
     canSignIn: function () { const sh = SH(); return !!(sh && sh.canSignIn()); },
     signIn: function () { const sh = SH(); return !!(sh && sh.signIn()); },
+    /** Before every socket REconnect: 'renewed' | 'retry' | 'relaunch' (token dead, signed out). */
+    renewForReconnect: function () { const sh = SH(); return sh ? sh.renewForReconnect() : Promise.resolve('relaunch'); },
+    /** Back to the launcher / sign-in for a fresh token; call from a click. False if refused. */
+    relaunch: function () { const sh = SH(); return !!(sh && sh.relaunch()); },
     inviteLink: function () { return hosted() ? SH().inviteLink() : null; },
     fetchPlatformLeaderboard: fetchPlatformLeaderboard,
     _fetchJson: fetchJson
