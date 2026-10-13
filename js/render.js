@@ -1114,9 +1114,9 @@
     const key = currentPostKey();
     if (key !== postKey) { postKey = key; buildPost(); }
     if (composer) {
-      try { composer.render(dt / 1000); }
-      catch (_) { postFailed = true; composer.dispose(); composer = null; postKey = null; renderer.render(scene, camera); }
-    } else renderer.render(scene, camera);
+      try { (globalThis.GameOptions ? globalThis.GameOptions.draw(composer.renderer, () => composer.render(dt / 1000)) : composer.render(dt / 1000)); }
+      catch (_) { postFailed = true; composer.dispose(); composer = null; postKey = null; (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera)); }
+    } else (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera));
   }
 
   function getQuality() { return gfx.preset; }

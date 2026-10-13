@@ -33,7 +33,7 @@
         const g = ctx.createGain();
         g.gain.value = levels[name];
         g.connect(master);
-        buses[name] = g;
+        buses[name] = (globalThis.GameOptions ? globalThis.GameOptions.tagBus(g, name) : g);
       }
       return true;
     } catch (_) { return false; }
@@ -59,7 +59,7 @@
   function blip(bus, freq, dur, type, gain, slideTo) {
     if (!ctx) return;
     const t = ctx.currentTime;
-    const o = ctx.createOscillator();
+    const o = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createOscillator(), bus) : ctx.createOscillator());
     const g = ctx.createGain();
     o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, t);
@@ -77,7 +77,7 @@
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = ctx.createBufferSource(); src.buffer = buf;
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), bus) : ctx.createBufferSource()); src.buffer = buf;
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lowFreq;
     const g = ctx.createGain(); g.gain.setValueAtTime(gain || 0.4, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -95,7 +95,7 @@
       const env = Math.sin(Math.PI * i / len);
       d[i] = (Math.random() * 2 - 1) * env * env;
     }
-    const src = ctx.createBufferSource(); src.buffer = buf;
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), bus) : ctx.createBufferSource()); src.buffer = buf;
     const f = ctx.createBiquadFilter(); f.type = 'bandpass';
     f.frequency.value = bright ? 1400 : 500; f.Q.value = 0.6;
     const g = ctx.createGain(); g.gain.value = gain;
@@ -120,7 +120,7 @@
   function playSample(name) {
     const st = sampleState[name];
     if (st && st.buffer) {
-      const src = ctx.createBufferSource();
+      const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), name) : ctx.createBufferSource());
       src.buffer = st.buffer;
       src.connect(buses.sfx);
       src.start();
@@ -192,7 +192,7 @@
       last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
       d[i] = last * 3;
     }
-    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource()); src.buffer = buf; src.loop = true;
     const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 320;
     const g = ctx.createGain(); g.gain.value = 0.5;
     src.connect(f); f.connect(g); g.connect(buses.ambience);
