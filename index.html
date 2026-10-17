@@ -30,20 +30,20 @@
 
   <!-- Top status bar (safe-area aware) -->
   <header id="status-bar" class="hidden">
-    <span id="sb-mode">Spot Kick</span>
+    <span id="sb-mode" data-i18n-skip>Spot Kick</span>
     <span id="sb-score" aria-live="polite">0 – 0</span>
     <span id="sb-clock"></span>
   </header>
 
   <!-- Loading -->
   <section id="screen-loading" class="screen" aria-label="Loading">
-    <h2>Spot Kick</h2>
+    <h2 data-i18n-skip>Spot Kick</h2>
     <p id="loading-status">Warming up the floodlights…</p>
   </section>
 
   <!-- Title / home -->
   <section id="screen-title" class="screen hidden" aria-labelledby="title-heading">
-    <h1 id="title-heading" class="title-name">SPOT KICK</h1>
+    <h1 id="title-heading" class="title-name" data-i18n-skip>SPOT KICK</h1>
     <p class="subtitle">Penalty shootout duel under the floodlights</p>
     <nav class="menu-buttons" aria-label="Main menu">
       <button type="button" id="btn-play" data-action="play">Play</button>
@@ -55,8 +55,8 @@
       <button type="button" id="btn-hosted" class="hidden" data-action="hosted">Online Match</button>
       <button type="button" data-action="help">Help</button>
       <button type="button" data-action="settings">Settings</button>
-      <button type="button" id="btn-signin" class="hidden" data-action="sh-signin">Sign in with StarHermit</button>
-      <button type="button" id="btn-invite" class="hidden" data-action="sh-invite">Invite a friend</button>
+      <button type="button" id="btn-signin" class="hidden" data-action="sh-signin" data-i18n-skip>Sign in with StarHermit</button>
+      <button type="button" id="btn-invite" class="hidden" data-action="sh-invite" data-i18n-skip>Invite a friend</button>
     </nav>
     <p id="title-profile" class="dim"></p>
   </section>
@@ -146,18 +146,18 @@
       </fieldset>
 
       <fieldset id="gfx-fieldset" class="gfx-fieldset">
-        <legend id="gfx-legend">Graphics</legend>
-        <label><span id="gfx-quality-label">Quality</span>
-          <select id="opt-quality" data-gfx="preset">
+        <legend id="gfx-legend" data-i18n-skip>Graphics</legend>
+        <label><span id="gfx-quality-label" data-i18n-skip>Quality</span>
+          <select id="opt-quality" data-gfx="preset" data-i18n-skip>
             <option value="auto">Auto</option>
           </select>
         </label>
-        <label class="gfx-range"><span id="gfx-scale-label">Render scale</span>
+        <label class="gfx-range"><span id="gfx-scale-label" data-i18n-skip>Render scale</span>
           <span class="range-row"><input type="range" id="opt-render-scale" data-gfx="render_scale" min="50" max="200" step="5" value="100" /><output id="opt-render-scale-out" for="opt-render-scale">100%</output></span>
         </label>
         <div id="gfx-categories" class="gfx-categories"></div>
-        <label class="check"><input type="checkbox" id="gfx-adaptive" data-gfx="adaptive" checked /> <span id="gfx-adaptive-label">Adaptive resolution</span></label>
-        <label class="check"><input type="checkbox" id="gfx-show-fps" data-gfx="show_fps" /> <span id="gfx-fps-label">Show frame rate</span></label>
+        <label class="check"><input type="checkbox" id="gfx-adaptive" data-gfx="adaptive" checked /> <span id="gfx-adaptive-label" data-i18n-skip>Adaptive resolution</span></label>
+        <label class="check"><input type="checkbox" id="gfx-show-fps" data-gfx="show_fps" /> <span id="gfx-fps-label" data-i18n-skip>Show frame rate</span></label>
         <p id="gfx-summary" class="gfx-summary" aria-live="polite"></p>
         <p id="gfx-post-note" class="gfx-note hidden" role="status"></p>
         <label>Theme <select id="opt-theme"></select></label>
@@ -198,10 +198,10 @@
 
   <!-- Session expired (launch token could not be renewed) -->
   <section id="overlay-expired" class="overlay hidden" role="alertdialog" aria-modal="true" aria-labelledby="expired-heading" aria-describedby="expired-body">
-    <h2 id="expired-heading">Your session expired</h2>
+    <h2 id="expired-heading" data-i18n-skip>Your session expired</h2>
     <p id="expired-body"></p>
-    <button type="button" data-action="sh-relaunch" id="btn-relaunch">Back to StarHermit</button>
-    <button type="button" data-action="expired-close" id="btn-expired-local">Play on this device</button>
+    <button type="button" data-action="sh-relaunch" id="btn-relaunch" data-i18n-skip>Back to StarHermit</button>
+    <button type="button" data-action="expired-close" id="btn-expired-local" data-i18n-skip>Play on this device</button>
   </section>
 
   <!-- Help -->
@@ -229,6 +229,9 @@
 <script src="./js/gfxpanel.js"></script>
 <script src="./starhermit-sdk.js"></script>
 <script>StarHermit.init();</script>
+<script src="./sh-language.js"></script>
+<script src="./js/strings.js"></script>
+<script src="./js/i18n.js"></script>
 <script src="./js/platform.js"></script>
 <script src="./js/sh-strings.js"></script>
 <script src="./js/net.js"></script>

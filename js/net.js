@@ -41,7 +41,10 @@
      * @param hooks    { rules, session, build, contentVersion, onEvent }
      *                 onEvent(op, msg) receives: open, peer-joined, peer-left,
      *                 start, snap, cmd-rejected, result, error, disconnected,
-     *                 auth-lost (token renewal refused; reconnecting stopped).
+     *                 auth-lost (token renewal refused; reconnecting stopped),
+     *                 terms-required (updated StarHermit terms need consent;
+     *                 reconnecting stopped), unavailable (the room is gone;
+     *                 reconnecting stopped).
      */
     constructor(platform, hooks) {
       this.platform = platform;
@@ -150,16 +153,22 @@
         // the upgrade, seen only as 1006): renew first, then rebuild the URL
         // from the current token. 'retry' backs off without reopening the old
         // URL; 'relaunch' means the token is dead — stop for good.
+        // 'terms-required' means the player must accept updated terms first:
+        // stop like auth loss and offer the relaunch.
         const renewal = await this._renewForReconnect();
         if (this.closed || !this.roomId) return;
         if (renewal === 'relaunch') return this._authLost();
+        if (renewal === 'terms-required') return this._authLost('terms-required');
         if (renewal !== 'renewed') return this._scheduleReconnect();
         this.platform._fetchJson('/realtime/rooms/mine', {}, 0)
           .then(async (res) => {
+            // The room is gone (finished, closed or expired): reopening can never
+            // succeed, so end the loop with a visible message instead of retrying.
+            if (!res.ok && [403, 404, 410].indexOf(res.status) >= 0) return this._unavailable();
             if (!res.ok) throw new Error('rooms-mine-failed');
             const m = res.data || {};
             const rid = m.roomId || m.id || (m.room && m.room.id) || null;
-            if (!rid) throw new Error('not-in-room');
+            if (!rid) return this._unavailable();
             this.roomId = rid;
             await this._connectWs();
             if (!this.isHost) this._emit('resumed', { roomId: this.roomId });
@@ -173,15 +182,28 @@
       try { return await this.platform.renewForReconnect(); } catch (_) { return 'retry'; } finally { this.renewing = false; }
     }
 
-    /** Renewal refused: drop the room locally (REST would 401) and surface relaunch. */
-    _authLost() {
+    /**
+     * Renewal refused (or terms consent pending): drop the room locally (REST
+     * would 401/403) and surface the relaunch prompt.
+     */
+    _authLost(op) {
+      this._stop();
+      this._emit(op || 'auth-lost', {});
+    }
+
+    /** The room no longer exists: stop reconnecting and say so. */
+    _unavailable() {
+      this._stop();
+      this._emit('unavailable', {});
+    }
+
+    _stop() {
       this.closed = true;
       this.hostMatch = null;
       this.roomId = null;
       this._guestSender = null;
       try { if (this.ws) this.ws.close(); } catch (_) { /* already closed */ }
       this.ws = null;
-      this._emit('auth-lost', {});
     }
 
     _sendControl(obj) {

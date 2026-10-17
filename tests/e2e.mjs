@@ -30,6 +30,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchToken, stubStarHermit } from './starhermit-e2e.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHOT = (stage, vp) => `/tmp/spot-kick-e2e-${stage}-${vp}.png`;
@@ -70,10 +71,10 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
 // Standalone (no launch token) must make zero same-origin /api or /ws requests.
-function watchOwnServer(page, errors) {
+function watchOwnServer(page, errors, state = {}) {
   page.on('request', (req) => {
     const u = new URL(req.url());
-    if (u.origin === BASE && /^\/(api|ws)(\/|$)/.test(u.pathname)) errors.push(`own-server request: ${req.method()} ${u.pathname}`);
+    if (!state.allowApi && u.origin === BASE && /^\/(api|ws)(\/|$)/.test(u.pathname)) errors.push(`own-server request: ${req.method()} ${u.pathname}`);
   });
 }
 
@@ -158,10 +159,11 @@ const zoneScreenPos = (page, phase, dir, height) => page.evaluate(([dir, height]
 // ---------- one full pass ----------
 async function runPass(browser, name, ctxOpts, { full }) {
   const errors = [];
+  const state = { allowApi: false };
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  watchOwnServer(page, errors);
+  watchOwnServer(page, errors, state);
   page.on('console', (m) => {
     if (m.type() !== 'error' || browserNoise.test(m.text())) return;
     const url = m.location()?.url || '';
@@ -284,6 +286,7 @@ async function runPass(browser, name, ctxOpts, { full }) {
       await page.click('#overlay-pause [data-action="leave"]');
       await page.waitForSelector('#screen-title:not(.hidden)');
       ok(`${name}: left match back to title`);
+      await languageFlow(page, name, state);
     } else {
       // mobile keeps the match going and verifies a real touch action landed
       const after = await readMatch(page);
@@ -299,6 +302,97 @@ async function runPass(browser, name, ctxOpts, { full }) {
   console.log(`ok - ${name}: no page errors`);
 }
 
+// ---------- Language + Report a problem (signed in against a stubbed StarHermit API) ----------
+// Mid-match: Automatic follows the account's preferredLanguage (fr-CA);
+// choosing Italian in the pause/settings overlay relabels the overlay, the HUD
+// and the shot panel in place (the match stays paused, nothing restarts) and
+// saves ui.language; Report a problem posts to /reports. On a phone the pass
+// also checks German at 390 px wide.
+async function languageFlow(page, name, state) {
+  const vw = page.viewportSize().width;
+  state.allowApi = true;
+  const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+  const overlay = page.locator('#overlay-pause');
+  try {
+    await page.goto('about:blank');
+    await page.goto(BASE + '/index.html#game_token=' + launchToken(), { waitUntil: 'load' });
+    await page.waitForSelector('#screen-title:not(.hidden)', { timeout: 15000 });
+    await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+    const play = (await page.textContent('#btn-play')).trim();
+    if (play !== 'Jouer') throw new Error(`${name}: title not in French: "${play}"`);
+    await page.click('#btn-play');
+    await page.waitForSelector('#screen-setup:not(.hidden)');
+    await page.click('#btn-start-match');
+    await page.waitForSelector('#screen-play:not(.hidden)', { timeout: 15000 });
+    await waitHumanTurn(page);
+    const tick0 = (await readMatch(page)).tick;
+    await page.click('#hud-actions [data-action="pause"]');
+    await page.waitForSelector('#overlay-pause:not(.hidden)');
+    const choice = overlay.locator('[data-game-language="choice"]');
+    await choice.scrollIntoViewIfNeeded();
+    const autoLabel = await choice.locator('option').first().textContent();
+    if (autoLabel !== 'Automatique — Français (Canada)') throw new Error(`${name}: Automatic label not resolved: "${autoLabel}"`);
+    if ((await page.locator('[data-game-language="choice"]').count()) !== 1) throw new Error(`${name}: expected exactly one language selector`);
+    const bb = await choice.boundingBox();
+    if (!bb || bb.x < 0 || bb.x + bb.width > vw + 1) throw new Error(`${name}: language select cut off (${JSON.stringify(bb)})`);
+    await choice.selectOption('it-IT');
+    await page.waitForFunction(() => document.documentElement.lang === 'it-IT');
+    await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]')?.textContent || ''));
+    if (calls.settings['ui.language']?.choice !== 'it-IT') throw new Error(`${name}: ui.language not saved: ${JSON.stringify(calls.settings)}`);
+    const checks = await page.evaluate(() => ({
+      heading: document.getElementById('pause-heading').textContent.trim(),
+      resume: document.querySelector('#overlay-pause [data-action="resume"]').textContent.trim(),
+      phase: document.getElementById('hud-phase').textContent.trim(),
+      aim: document.querySelector('#panel-shoot .panel-label').textContent.trim(),
+      gfx: document.getElementById('gfx-legend').textContent.trim(),
+      music: document.querySelector('#opt-music').closest('label').firstChild.textContent.trim(),
+      state: window.SpotKickDebug.G.appState,
+    }));
+    if (checks.heading !== 'In pausa' || checks.resume !== 'Riprendi' || !/^Il tuo tiro/.test(checks.phase) || !/^Mira:/.test(checks.aim) || checks.gfx !== 'Grafica' || checks.music !== 'Musica') {
+      throw new Error(`${name}: text not re-rendered: ${JSON.stringify(checks)}`);
+    }
+    if (checks.state !== 'paused' || (await readMatch(page)).tick !== tick0) throw new Error(`${name}: language change disturbed the match`);
+    await overlay.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+    await overlay.locator('[data-game-report="title"]').fill('Test report');
+    await overlay.locator('[data-game-report="send"]').click();
+    await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]')?.textContent || ''));
+    if (!calls.reports?.[0] || calls.reports[0].kind !== 'bug') throw new Error(`${name}: report not posted`);
+    await page.screenshot({ path: SHOT('language', name) });
+    if (vw < 500) {
+      await choice.selectOption('de-DE');
+      await page.waitForFunction(() => document.documentElement.lang === 'de-DE');
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: SHOT('settings-de', name) });
+      await overlay.getByRole('button', { name: 'Fortsetzen', exact: true }).click();
+      await page.waitForFunction(() => document.getElementById('overlay-pause').classList.contains('hidden'));
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: SHOT('play-de', name) });
+      const layout = await page.evaluate(() => {
+        const vis = (el) => el && el.offsetParent !== null && el.getBoundingClientRect().width > 0;
+        const rects = [...document.querySelectorAll('#hud-actions button, #panel-shoot button')].filter(vis).map((e) => e.getBoundingClientRect());
+        let overlap = false;
+        for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+          const a = rects[i], b = rects[j];
+          if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) overlap = true;
+        }
+        const clipped = [...document.querySelectorAll('#screen-play button, #screen-play p')].filter(vis).some((e) => e.scrollWidth > e.clientWidth + 2);
+        return { overflow: document.documentElement.scrollWidth - window.innerWidth, overlap, clipped };
+      });
+      if (layout.overflow > 1 || layout.overlap || layout.clipped) throw new Error(`${name}: German play layout problem ${JSON.stringify(layout)}`);
+      await page.click('#hud-actions [data-action="pause"]');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+    }
+    await choice.selectOption('auto');
+    await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+    await page.click('#overlay-pause [data-action="leave"]');
+    await page.waitForSelector('#screen-title:not(.hidden)');
+    ok(`${name}: Language — Automatic resolved to fr-CA, Italian relabelled the paused match live and saved ui.language, report posted`);
+  } finally {
+    await page.unroute(/\/api\/v1\//);
+    state.allowApi = false;
+  }
+}
+
 // ---------- mobile: real moves via touchscreen.tap ----------
 async function runMobile(browser, name) {
   const errors = [];
@@ -306,8 +400,9 @@ async function runMobile(browser, name) {
     viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
   });
   const page = await context.newPage();
+  const state = { allowApi: false };
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  watchOwnServer(page, errors);
+  watchOwnServer(page, errors, state);
   page.on('console', (m) => {
     if (m.type() !== 'error' || browserNoise.test(m.text())) return;
     const url = m.location()?.url || '';
@@ -377,6 +472,7 @@ async function runMobile(browser, name) {
         }
       }
     }
+    await languageFlow(page, name, state);
   } finally {
     await context.close();
   }

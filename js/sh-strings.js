@@ -2,8 +2,9 @@
 
 /*
  * Spot Kick — localized strings for the StarHermit account controls
- * (sign-in, invite link, sign-out notice, session expired). Locale follows navigator.language
- * through the Graphics panel's picker. Browser global: window.SpotKickShStrings.
+ * (sign-in, invite link, sign-out notice, session expired, terms consent,
+ * leaderboard line). bootstrap.js passes the game language (SKI18N.lang).
+ * Browser global: window.SpotKickShStrings.
  */
 (function (root) {
   const EN = {
@@ -16,6 +17,8 @@
     expiredBody: 'Your StarHermit session ended, so the match connection stopped. Go back to StarHermit to start a fresh session.',
     relaunch: 'Back to StarHermit',
     playLocal: 'Play on this device',
+    termsTitle: 'Updated StarHermit terms',
+    termsBody: 'StarHermit needs you to accept its updated terms, so the match connection stopped. Go back to StarHermit to review them and keep playing online.',
     lbPosting: 'Posting score to the leaderboard…',
     lbRank: 'Leaderboard rank: #{rank}',
     lbPosted: 'Score posted to the leaderboard.',
@@ -31,6 +34,8 @@
     expiredBody: 'Tu sesión de StarHermit terminó y se detuvo la conexión con el partido. Vuelve a StarHermit para iniciar una nueva sesión.',
     relaunch: 'Volver a StarHermit',
     playLocal: 'Jugar en este dispositivo',
+    termsTitle: 'Términos de StarHermit actualizados',
+    termsBody: 'StarHermit necesita que aceptes sus términos actualizados, así que se detuvo la conexión con el partido. Vuelve a StarHermit para revisarlos y seguir jugando en línea.',
     lbPosting: 'Publicando la puntuación en la clasificación…',
     lbRank: 'Puesto en la clasificación: #{rank}',
     lbPosted: 'Puntuación publicada en la clasificación.',
@@ -46,6 +51,8 @@
     expiredBody: 'Votre session StarHermit est terminée, la connexion au match a donc été interrompue. Retournez sur StarHermit pour démarrer une nouvelle session.',
     relaunch: 'Retour à StarHermit',
     playLocal: 'Jouer sur cet appareil',
+    termsTitle: 'Conditions de StarHermit mises à jour',
+    termsBody: 'StarHermit vous demande d’accepter ses conditions mises à jour : la connexion au match a donc été interrompue. Retournez sur StarHermit pour les consulter et continuer à jouer en ligne.',
     lbPosting: 'Envoi du score au classement…',
     lbRank: 'Rang au classement : #{rank}',
     lbPosted: 'Score envoyé au classement.',
@@ -63,6 +70,8 @@
       expiredBody: 'Deine StarHermit-Sitzung ist beendet, daher wurde die Verbindung zum Spiel getrennt. Kehre zu StarHermit zurück, um eine neue Sitzung zu starten.',
       relaunch: 'Zurück zu StarHermit',
       playLocal: 'Auf diesem Gerät spielen',
+      termsTitle: 'Aktualisierte StarHermit-Bedingungen',
+      termsBody: 'StarHermit braucht deine Zustimmung zu den aktualisierten Bedingungen, daher wurde die Verbindung zum Spiel getrennt. Kehre zu StarHermit zurück, um sie zu prüfen und online weiterzuspielen.',
       lbPosting: 'Punktzahl wird in die Bestenliste eingetragen…',
       lbRank: 'Platz in der Bestenliste: #{rank}',
       lbPosted: 'Punktzahl in die Bestenliste eingetragen.',
@@ -80,6 +89,8 @@
       expiredBody: 'Sua sessão do StarHermit terminou e a conexão com a partida foi interrompida. Volte ao StarHermit para iniciar uma nova sessão.',
       relaunch: 'Voltar ao StarHermit',
       playLocal: 'Jogar neste dispositivo',
+      termsTitle: 'Termos do StarHermit atualizados',
+      termsBody: 'O StarHermit precisa que você aceite os termos atualizados, por isso a conexão com a partida foi interrompida. Volte ao StarHermit para revisá-los e continuar jogando online.',
       lbPosting: 'Enviando a pontuação para o ranking…',
       lbRank: 'Posição no ranking: #{rank}',
       lbPosted: 'Pontuação enviada para o ranking.',
@@ -95,6 +106,8 @@
       expiredBody: 'La tua sessione StarHermit è terminata, quindi la connessione alla partita si è interrotta. Torna su StarHermit per avviare una nuova sessione.',
       relaunch: 'Torna a StarHermit',
       playLocal: 'Gioca su questo dispositivo',
+      termsTitle: 'Termini di StarHermit aggiornati',
+      termsBody: 'StarHermit ti chiede di accettare i termini aggiornati, quindi la connessione alla partita si è interrotta. Torna su StarHermit per leggerli e continuare a giocare online.',
       lbPosting: 'Invio del punteggio alla classifica…',
       lbRank: 'Posizione in classifica: #{rank}',
       lbPosted: 'Punteggio inviato alla classifica.',

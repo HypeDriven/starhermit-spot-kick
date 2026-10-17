@@ -11,8 +11,8 @@
  * loaded first) reads the launch token (#game_token / #access_token, then
  * stripped), takes the slug from game_scope and renews the token. Through
  * the SDK this adapter provides the account nickname, the cloud-save mirror
- * (slot game:<slug>; remote wins on load, localStorage stays the offline
- * cache), the settings KV, keyboard bindings (control.* in starhermit.txt),
+ * (slot game:<slug>; merged with the local save on load and after a save
+ * conflict, localStorage stays the offline cache), the settings KV, keyboard bindings (control.* in starhermit.txt),
  * read-only platform leaderboards, sign-in and the invite link; realtime
  * rooms (js/net.js) use fetchJson with the SDK's live token; GET /api/v1/time
  * syncs the clock. The repo's own session and leaderboard routes are never
@@ -36,6 +36,8 @@
   if (sdk && !sdk.token) sdk.init();
 
   function hosted() { const sh = SH(); return !!(sh && sh.signedIn); }
+  const T = (key, vars) => ((root && root.SKI18N) ? root.SKI18N.T(key, vars)
+    : String(key).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? vars[k] : m)));
   function liveToken() { const sh = SH(); return sh ? sh.token : null; }
 
   // Keyboard actions; mirrors the control.* lines in starhermit.txt.
@@ -133,7 +135,7 @@
   /** Resolve a user id to a display nickname ("Player "+id prefix fallback). */
   async function profileFor(userId) {
     const p = hosted() ? await SH().profile(String(userId)).catch(function () { return null; }) : null;
-    return p ? p.displayName : 'Player ' + String(userId).slice(0, 6);
+    return p ? p.displayName : T('Player {id}', { id: String(userId).slice(0, 6) });
   }
 
   /** Load the signed-in player's nickname into the identity slot. */
@@ -145,7 +147,7 @@
 
   function displayName() {
     if (!hosted()) return null;
-    return nickname || ('Player ' + String(SH().userId).slice(0, 6));
+    return nickname || T('Player {id}', { id: String(SH().userId).slice(0, 6) });
   }
 
   // ---- cloud save (slot game:<slug> via the SDK; localStorage stays the cache) ----
@@ -153,6 +155,7 @@
   let syncStatus = 'offline';           // offline | saving | synced
   let onSync = null;                    // fn(status)
   let onSignedOut = null;               // fn()
+  let onConflict = null;                // fn(encodedRemoteSave|null) after another device saved first
 
   function setSync(status) {
     if (syncStatus === status) return;
@@ -186,7 +189,19 @@
     return p !== null ? pushCloudSave(p, keepalive) : Promise.resolve();
   }
 
+  // Another device wrote the slot since our last load: the SDK refused the
+  // conditional write and blocks further ones until a reload. Reload the
+  // remote doc and let the game merge it; the merge is then saved again.
+  async function resolveConflict() {
+    const sh = SH();
+    if (!hosted() || !sh) return;
+    const text = await sh.loadSave().catch(function () { return null; });
+    if (sh.saveConflicted() || sh.saveLoadFailed()) { setSync('offline'); return; }
+    if (onConflict) onConflict(text && text.indexOf('.') >= 0 ? text : null);
+  }
+
   if (sdk) {
+    sdk.on('saveconflict', function () { resolveConflict(); });
     sdk.on('auth', function (a) {
       if (a.signedIn) return;
       nickname = null;
@@ -272,7 +287,7 @@
         const userId = r && r.userId ? r.userId : null;
         base.entries.push({
           userId: userId,
-          name: userId ? await profileFor(userId) : 'Player',
+          name: userId ? await profileFor(userId) : null,
           score: r && typeof r.score === 'number' ? r.score : 0,
           rank: r && r.rank ? r.rank : null,
           you: !!userId && userId === sh.userId
@@ -293,6 +308,8 @@
     displayName: displayName, fetchProfile: fetchProfile, profileFor: profileFor,
     onSync: function (fn) { onSync = fn; },
     onSignedOut: function (fn) { onSignedOut = fn; },
+    /** fn(encodedSave|null): a save conflict reloaded the cloud doc; the game merges and saves. */
+    onConflict: function (fn) { onConflict = fn; },
     getSyncStatus: getSyncStatus,
     queueCloudSave: queueCloudSave, pushCloudSave: pushCloudSave, flushCloudSave: flushCloudSave, cloudLoad: cloudLoad,
     initHosted: initHosted,
@@ -300,7 +317,7 @@
     loadControls: loadControls, actionFor: actionFor, keyLabel: keyLabel, DEFAULT_CONTROLS: DEFAULT_CONTROLS,
     canSignIn: function () { const sh = SH(); return !!(sh && sh.canSignIn()); },
     signIn: function () { const sh = SH(); return !!(sh && sh.signIn()); },
-    /** Before every socket REconnect: 'renewed' | 'retry' | 'relaunch' (token dead, signed out). */
+    /** Before every socket REconnect: 'renewed' | 'retry' | 'relaunch' (token dead, signed out) | 'terms-required'. */
     renewForReconnect: function () { const sh = SH(); return sh ? sh.renewForReconnect() : Promise.resolve('relaunch'); },
     /** Back to the launcher / sign-in for a fresh token; call from a click. False if refused. */
     relaunch: function () { const sh = SH(); return !!(sh && sh.relaunch()); },

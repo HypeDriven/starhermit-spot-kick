@@ -19,6 +19,22 @@
 
   const BUILD = '1.0.0';
 
+  // Text goes through SKI18N (js/i18n.js); English source strings are the keys.
+  const T = (key, vars) => (window.SKI18N ? window.SKI18N.T(key, vars)
+    : String(key).replace(/\{(\w+)\}/g, (m, k) => (vars && k in vars ? vars[k] : m)));
+  const gameLang = () => (window.SKI18N ? window.SKI18N.lang : 'en-US');
+  // Mode labels are thunks so the HUD and status bar follow a language change.
+  const ml = (c) => (c && c.modeLabel ? (typeof c.modeLabel === 'function' ? c.modeLabel() : c.modeLabel) : '');
+  // Player-facing words for rule values (rules.js / content.js data stay English).
+  const WORD = {
+    left: 'left', center: 'center', right: 'right', high: 'high', low: 'low', none: 'none',
+    early: 'early', on: 'on time', late: 'late',
+  };
+  const GOAL = { win: 'win', 'win-by-2': 'win by 2', 'clean-sheet': 'clean sheet' };
+  const w = (v) => T(WORD[v] || v);
+  const zoneName = (z) => T('{dir} {height}', { dir: w(z.dir), height: w(z.height) });
+  /** Localized journey stage name (content.js builds "Stage N" / "Stage N — Mastery"). */
+  const stageName = (st) => (/Mastery/.test(st.name) ? T('Stage {n} — Mastery', { n: st.index }) : T('Stage {n}', { n: st.index }));
   // ---------- controller state (UI-side, separate from sim state) ----------
   const G = {
     appState: 'boot',
@@ -45,7 +61,7 @@
 
   // ---------- boot ----------
   function boot() {
-    ui.setLoadingStatus('Checking content…');
+    ui.setLoadingStatus(T('Checking content…'));
     const check = content.validateContent();
     if (!check.ok) console.error('Content validation failed:', check.errors);
 
@@ -70,7 +86,7 @@
     wireAccount();
     ui.bindSettings(onSettingChange);
     window.SpotKickGfxPanel.init({
-      lang: (navigator.languages && navigator.languages[0]) || navigator.language,
+      lang: gameLang(),
       render: render, getSaved: ui.getGfx, save: ui.setGfx,
       onChange: () => onSettingChange('gfx')
     });
@@ -80,15 +96,15 @@
     // (remote wins) before the profile line and journey counts render.
     platform.onSync(() => { if (G.appState === 'title') ui.setProfileLine(profileLine()); });
     if (platform.hosted()) {
-      ui.setLoadingStatus('Connecting to your account…');
+      ui.setLoadingStatus(T('Connecting to your account…'));
+      // Another device saved first: reload, merge with this device's save and write the merge.
+      platform.onConflict((remote) => {
+        adoptRemoteSave(remote, true);
+        if (G.appState === 'title') ui.setProfileLine(profileLine());
+      });
       platform.initHosted().then((remote) => {
         applyPlatformSettings();
-        if (remote) {
-          try {
-            const parsed = session.decodeSave(remote);
-            if (parsed && parsed.data) ui.adoptSave(parsed.data);
-          } catch (_) { /* malformed remote doc: local cache stays */ }
-        }
+        adoptRemoteSave(remote, false);
         ui.setJourneyProgress(ui.getSave().journeyDone.length, content.JOURNEY.length);
         ui.setProfileLine(profileLine());
       });
@@ -107,6 +123,25 @@
     requestAnimationFrame(loop);
   }
 
+  /**
+   * Merge a cloud save doc (encoded string) into the local save (ui.mergeSaves:
+   * union of stages and achievements, max stats/streaks) and upload the merge
+   * when the cloud lacked anything this device has.
+   */
+  function adoptRemoteSave(remote, afterConflict) {
+    let data = null;
+    if (remote) {
+      try {
+        const parsed = session.decodeSave(remote);
+        if (parsed && parsed.data) data = parsed.data;
+      } catch (_) { /* malformed remote doc: local cache stays */ }
+    }
+    const before = JSON.stringify(ui.mergeSaves(data, null));
+    ui.adoptSave(data);
+    const changed = JSON.stringify(ui.getSave()) !== before;
+    if (changed || afterConflict) platform.queueCloudSave(session.encodeSave(ui.getSave()));
+  }
+
   function setAppState(s, reason) {
     G.appState = s;
     document.body.dataset.state = s;
@@ -114,7 +149,8 @@
   }
 
   // ---------- StarHermit: settings KV, sign-in / invite, sign-out ----------
-  const SH_TEXT = window.SpotKickShStrings.strings((navigator.languages && navigator.languages[0]) || navigator.language);
+  // StarHermit account strings in the current game language (sh-strings.js).
+  const SHT = () => window.SpotKickShStrings.strings(gameLang());
   let platformSettingsApplied = false;
 
   // Signed in: the platform's settings win over the local ones; afterwards
@@ -142,17 +178,23 @@
     document.getElementById('btn-hosted').classList.toggle('hidden', !platform.hosted());
   }
 
+  // The relaunch overlay explains why: an expired session or pending terms consent.
+  let expiredReason = 'expired';
+  function labelAccount() {
+    const L = SHT();
+    document.getElementById('btn-signin').textContent = L.signIn;
+    document.getElementById('btn-invite').textContent = L.invite;
+    document.getElementById('expired-heading').textContent = expiredReason === 'terms' ? L.termsTitle : L.expiredTitle;
+    document.getElementById('expired-body').textContent = expiredReason === 'terms' ? L.termsBody : L.expiredBody;
+    document.getElementById('btn-relaunch').textContent = L.relaunch;
+    document.getElementById('btn-expired-local').textContent = L.playLocal;
+  }
   function wireAccount() {
-    document.getElementById('btn-signin').textContent = SH_TEXT.signIn;
-    document.getElementById('btn-invite').textContent = SH_TEXT.invite;
-    document.getElementById('expired-heading').textContent = SH_TEXT.expiredTitle;
-    document.getElementById('expired-body').textContent = SH_TEXT.expiredBody;
-    document.getElementById('btn-relaunch').textContent = SH_TEXT.relaunch;
-    document.getElementById('btn-expired-local').textContent = SH_TEXT.playLocal;
+    labelAccount();
     platform.onSignedOut(() => {
       // A refused renewal before a room reconnect shows the expired overlay instead.
       const renewing = G.hosted && G.hosted.client && G.hosted.client.renewing;
-      if (!renewing) ui.toast(SH_TEXT.signedOut);
+      if (!renewing) ui.toast(SHT().signedOut);
       refreshAccount();
       if (G.appState === 'title') ui.setProfileLine(profileLine());
     });
@@ -162,19 +204,19 @@
   async function copyInvite() {
     const link = platform.inviteLink();
     if (!link) return;
-    try { await navigator.clipboard.writeText(link); ui.toast(SH_TEXT.copied); }
-    catch (_) { ui.toast(SH_TEXT.copyFailed + ': ' + link); }
+    try { await navigator.clipboard.writeText(link); ui.toast(SHT().copied); }
+    catch (_) { ui.toast(SHT().copyFailed + ': ' + link); }
   }
 
   function profileLine() {
     const s = ui.getSave();
     const wins = s.stats.wins, m = s.stats.matches;
-    const stats = m ? (wins + ' wins in ' + m + ' matches · best streak ' + s.bestStreak) : null;
+    const stats = m ? T('{wins} wins in {matches} matches · best streak {streak}', { wins: wins, matches: m, streak: s.bestStreak }) : null;
     if (platform.hosted()) {
-      const sync = { saving: 'saving…', synced: 'synced', offline: 'offline' }[platform.getSyncStatus()] || 'offline';
-      return 'Playing as ' + (platform.displayName() || '…') + ' · cloud save ' + sync + (stats ? ' · ' + stats : '');
+      const sync = T({ saving: 'saving…', synced: 'synced', offline: 'offline' }[platform.getSyncStatus()] || 'offline');
+      return T('Playing as {name} · cloud save {sync}', { name: platform.displayName() || '…', sync: sync }) + (stats ? ' · ' + stats : '');
     }
-    return m ? ('Guest profile · ' + stats) : 'Guest profile — progress is stored on this device';
+    return m ? (T('Guest profile') + ' · ' + stats) : T('Guest profile — progress is stored on this device');
   }
 
   function currentTheme() {
@@ -185,12 +227,14 @@
 
   function fillThemeSelect() {
     const sel = $('opt-theme');
+    const keep = sel.value;
     sel.innerHTML = '';
     content.THEMES.forEach(t => {
       const o = document.createElement('option');
-      o.value = t.id; o.textContent = t.name;
+      o.value = t.id; o.textContent = T(t.name);
       sel.appendChild(o);
     });
+    if (keep) sel.value = keep;
   }
 
   function applyVisualSettings() {
@@ -239,7 +283,7 @@
       updateSelectionUi();
       audio.event('ui-confirm');
     }));
-    audio.onCaption((t) => ui.caption(t));
+    audio.onCaption((t) => ui.caption(t ? T(t) : t)); // audio.js captions are English keys
   }
 
   function markSeg(kind, val) {
@@ -253,11 +297,11 @@
   function keyboardBindings() {
     const k = platform.keyLabel;
     return [
-      k('left') + ' ' + k('right') + ' ' + k('high') + ' ' + k('low') + ': move zone cursor',
-      k('confirm') + ': select zone or confirm',
-      k('curveLeft') + '/' + k('curveRight') + ': curve', k('early') + '/' + k('onTime') + '/' + k('late') + ': dive timing',
-      k('pause') + ': pause', k('undo') + ': undo (practice)',
-      k('help') + ': help', k('camera') + ': reset camera', k('skip') + ': skip animation'
+      T('{keys}: move zone cursor', { keys: k('left') + ' ' + k('right') + ' ' + k('high') + ' ' + k('low') }),
+      T('{keys}: select zone or confirm', { keys: k('confirm') }),
+      T('{keys}: curve', { keys: k('curveLeft') + '/' + k('curveRight') }), T('{keys}: dive timing', { keys: k('early') + '/' + k('onTime') + '/' + k('late') }),
+      T('{keys}: pause', { keys: k('pause') }), T('{keys}: undo (practice)', { keys: k('undo') }),
+      T('{keys}: help', { keys: k('help') }), T('{keys}: reset camera', { keys: k('camera') }), T('{keys}: skip animation', { keys: k('skip') })
     ];
   }
 
@@ -353,7 +397,7 @@
       case 'settings': labelPauseOverlay(false); ui.openOverlay('overlay-pause'); break;
       case 'sh-signin': platform.signIn(); break;
       case 'sh-invite': copyInvite(); break;
-      case 'sh-relaunch': if (!platform.relaunch()) ui.toast(SH_TEXT.signedOut); break;
+      case 'sh-relaunch': if (!platform.relaunch()) ui.toast(SHT().signedOut); break;
       case 'expired-close': ui.closeOverlay('overlay-expired'); break;
       case 'start-match': startConfiguredMatch(); break;
       case 'back-to-menu': leaveToTitle(); break;
@@ -373,51 +417,58 @@
   }
 
   // ---------- mode setup screens ----------
-  function setupPlay() {
+  // The open setup screen's builder: a language change rebuilds it with the same choice.
+  let setupRedraw = null;
+  function setupPlay(relabel) {
+    setupRedraw = () => setupPlay(true);
     setAppState('mode-select');
     const body = ui.el('div');
-    body.appendChild(ui.el('p', 'dim', 'A five-kick shootout. You shoot first, then guard the goal.'));
+    body.appendChild(ui.el('p', 'dim', T('A five-kick shootout. You shoot first, then guard the goal.')));
     const vs = ui.el('div', 'seg');
-    const aiBtn = ui.el('button', 'on', 'Vs AI (Club)');
-    const p2Btn = ui.el('button', null, 'Two players · this device');
+    const aiBtn = ui.el('button', G.hotseat && relabel ? null : 'on', T('Vs AI (Club)'));
+    const p2Btn = ui.el('button', G.hotseat && relabel ? 'on' : null, T('Two players · this device'));
     aiBtn.onclick = () => { G.hotseat = false; aiBtn.classList.add('on'); p2Btn.classList.remove('on'); };
     p2Btn.onclick = () => { G.hotseat = true; p2Btn.classList.add('on'); aiBtn.classList.remove('on'); };
     vs.append(aiBtn, p2Btn);
     body.appendChild(vs);
-    G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: 'Quick Match' };
+    if (!relabel) G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: () => T('Quick Match') };
     $('btn-start-match').disabled = false;
-    ui.setupView('Quick Match', 'Five kicks each · sudden death on ties · about 3 minutes · unranked', body);
-    audio.event('ui-confirm');
+    ui.setupView(T('Quick Match'), T('Five kicks each · sudden death on ties · about 3 minutes · unranked'), body);
+    if (!relabel) audio.event('ui-confirm');
   }
 
-  function setupDaily() {
+  function setupDaily(relabel) {
+    setupRedraw = () => setupDaily(true);
     setAppState('mode-select');
     const day = content.utcDay(new Date(platform.now()));
     const d = content.dailyFor(day);
     const done = ui.getSave().dailyResults[day];
     const hosted = platform.hosted();
     const body = ui.el('div');
-    body.appendChild(ui.el('p', null, 'Seed: ' + d.seed.toString(16) + ' · ' + day + ' (UTC)'));
+    body.appendChild(ui.el('p', null, T('Seed: {seed} · {day} (UTC)', { seed: d.seed.toString(16), day: day })));
     body.appendChild(ui.el('p', 'dim', done
-      ? 'Played today: ' + (done.won ? 'won ' + done.score : 'lost ' + done.score) + '. You can replay, but the recorded result stands.'
+      ? T(done.won ? 'Played today: won {score}. You can replay, but the recorded result stands.' : 'Played today: lost {score}. You can replay, but the recorded result stands.', { score: done.score })
       : (hosted
-        ? 'One shared seed for everyone today. Your first result is recorded to your profile.'
-        : 'One shared seed for everyone today. First result is ranked.')));
-    G.config = Object.assign({ modeLabel: 'Daily Challenge', daily: d, ranked: !done }, d);
+        ? T('One shared seed for everyone today. Your first result is recorded to your profile.')
+        : T('One shared seed for everyone today. First result is ranked.'))));
+    G.config = Object.assign({ modeLabel: () => T('Daily Challenge'), daily: d, ranked: !done }, d);
     $('btn-start-match').disabled = false;
-    ui.setupView('Daily Challenge', 'Five kicks · Club keeper · ' +
-      (hosted ? 'first result recorded per UTC day' : 'ranked once per UTC day') + ' · ' +
-      (d.excluded ? 'excluded from the board' : (hosted ? 'counted on your profile' : 'ranked')), body);
-    audio.event('ui-confirm');
+    ui.setupView(T('Daily Challenge'), [T('Five kicks · Club keeper'),
+      hosted ? T('first result recorded per UTC day') : T('ranked once per UTC day'),
+      d.excluded ? T('excluded from the board') : (hosted ? T('counted on your profile') : T('ranked'))].join(' · '), body);
+    if (!relabel) audio.event('ui-confirm');
   }
 
-  function setupJourney() {
+  function setupJourney(relabel) {
+    setupRedraw = () => setupJourney(true);
     setAppState('mode-select');
     const doneSet = new Set(ui.getSave().journeyDone);
     const grid = ui.el('div', 'stage-grid');
     let firstOpen = null;
+    const picked = relabel && G.config && G.config.stage ? G.config.stage.id : null;
     content.JOURNEY.forEach((st, idx) => {
-      const b = ui.el('button', null, st.name);
+      const b = ui.el('button', null, stageName(st));
+      if (st.id === picked) b.classList.add('selected');
       const done = doneSet.has(st.id);
       const locked = idx > 0 && !doneSet.has(content.JOURNEY[idx - 1].id) && !done;
       b.classList.toggle('done', done);
@@ -427,46 +478,51 @@
       b.onclick = () => {
         grid.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
         b.classList.add('selected');
-        G.config = Object.assign({ modeLabel: 'Journey — ' + st.name, stage: st }, st);
+        G.config = Object.assign({ modeLabel: () => T('Journey — {name}', { name: stageName(st) }), stage: st }, st);
         $('setup-rules').textContent = stageRulesText(st);
         $('btn-start-match').disabled = false;
         audio.event('ui-confirm');
       };
       grid.appendChild(b);
     });
-    if (firstOpen) {
-      G.config = Object.assign({ modeLabel: 'Journey — ' + firstOpen.name }, firstOpen);
+    if (picked) {
+      $('btn-start-match').disabled = false;
+    } else if (firstOpen) {
+      G.config = Object.assign({ modeLabel: () => T('Journey — {name}', { name: stageName(firstOpen) }) }, firstOpen);
       $('btn-start-match').disabled = false;
     } else {
       G.config = null; // journey complete: nothing to start
       $('btn-start-match').disabled = true;
     }
-    ui.setupView('Journey',
-      'Forty stages in four blocks: straight shots, then curve, then pressure, then mastery. Complete a stage to unlock the next.',
+    ui.setupView(T('Journey'),
+      T('Forty stages in four blocks: straight shots, then curve, then pressure, then mastery. Complete a stage to unlock the next.'),
       grid);
-    if (firstOpen) $('setup-rules').textContent = stageRulesText(firstOpen);
-    else $('setup-rules').textContent = 'Journey complete — every stage finished. Try the daily challenge.';
-    audio.event('ui-confirm');
+    const shown = picked ? G.config : firstOpen;
+    if (shown) $('setup-rules').textContent = stageRulesText(shown);
+    else $('setup-rules').textContent = T('Journey complete — every stage finished. Try the daily challenge.');
+    if (!relabel) audio.event('ui-confirm');
   }
 
   function stageRulesText(st) {
     const c = st.constraints;
     const bans = [];
-    if (c.bannedCurves.length) bans.push('no ' + c.bannedCurves.join('/') + ' curve');
-    if (c.bannedHeights.length) bans.push(c.bannedHeights.join('/') + ' shots banned');
-    if (c.bannedColumns.length) bans.push('no ' + c.bannedColumns.join('/') + ' shots');
-    return st.rounds + ' kicks each · AI: ' + content.PRACTICE_DIFFICULTIES[st.aiDifficulty].name +
-      ' · goal: ' + st.goal + (bans.length ? ' · ' + bans.join(', ') : '');
+    if (c.bannedCurves.length) bans.push(T('no {list} curve', { list: c.bannedCurves.map(w).join('/') }));
+    if (c.bannedHeights.length) bans.push(T('{list} shots banned', { list: c.bannedHeights.map(w).join('/') }));
+    if (c.bannedColumns.length) bans.push(T('no {list} shots', { list: c.bannedColumns.map(w).join('/') }));
+    return T('{n} kicks each · AI: {ai} · goal: {goal}', { n: st.rounds, ai: T(content.PRACTICE_DIFFICULTIES[st.aiDifficulty].name), goal: T(GOAL[st.goal] || st.goal) }) +
+      (bans.length ? ' · ' + bans.join(', ') : '');
   }
 
-  function setupPractice() {
+  function setupPractice(relabel) {
+    setupRedraw = () => setupPractice(true);
     setAppState('mode-select');
     const body = ui.el('div');
-    body.appendChild(ui.el('p', 'dim', 'Unranked. Undo allowed. No effect on ratings or journey.'));
+    body.appendChild(ui.el('p', 'dim', T('Unranked. Undo allowed. No effect on ratings or journey.')));
     const seg = ui.el('div', 'seg');
+    const current = relabel && G.config ? G.config.aiDifficulty : 1;
     content.PRACTICE_DIFFICULTIES.forEach((d, i) => {
-      const b = ui.el('button', i === 1 ? 'on' : null, d.name);
-      b.title = d.blurb;
+      const b = ui.el('button', i === current ? 'on' : null, T(d.name));
+      b.title = T(d.blurb);
       b.onclick = () => {
         seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
         b.classList.add('on');
@@ -476,31 +532,34 @@
       seg.appendChild(b);
     });
     body.appendChild(seg);
-    G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: 'Practice', practice: true };
+    if (!relabel) G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: () => T('Practice'), practice: true };
     $('btn-start-match').disabled = false;
-    ui.setupView('Practice', 'Five kicks each · undo permitted · restart any time · unranked', body);
-    audio.event('ui-confirm');
+    ui.setupView(T('Practice'), T('Five kicks each · undo permitted · restart any time · unranked'), body);
+    if (!relabel) audio.event('ui-confirm');
   }
 
-  function setupChallenge() {
+  function setupChallenge(relabel) {
+    setupRedraw = () => setupChallenge(true);
     setAppState('mode-select');
-    G.config = null; // require an explicit pick; never reuse a previous mode's config
-    $('btn-start-match').disabled = true;
+    const picked = relabel && G.config && G.config.challenge ? G.config.challenge.id : null;
+    if (!picked) G.config = null; // require an explicit pick; never reuse a previous mode's config
+    $('btn-start-match').disabled = !picked;
     const grid = ui.el('div', 'stage-grid');
     content.CHALLENGES.forEach(ch => {
-      const b = ui.el('button', null, ch.name + ' — ' + ch.blurb);
+      const b = ui.el('button', ch.id === picked ? 'selected' : null, T(ch.name) + ' — ' + T(ch.blurb));
       b.onclick = () => {
         grid.querySelectorAll('button').forEach(x => x.classList.remove('selected'));
         b.classList.add('selected');
-        G.config = Object.assign({ modeLabel: 'Challenge — ' + ch.name, challenge: ch }, ch);
+        G.config = Object.assign({ modeLabel: () => T('Challenge — {name}', { name: T(ch.name) }), challenge: ch }, ch);
         $('setup-rules').textContent = stageRulesText(ch);
         $('btn-start-match').disabled = false;
         audio.event('ui-confirm');
       };
       grid.appendChild(b);
     });
-    ui.setupView('Challenge', 'Constrained rule sets. Pick one, then Start Match.', grid);
-    audio.event('ui-confirm');
+    ui.setupView(T('Challenge'), T('Constrained rule sets. Pick one, then Start Match.'), grid);
+    if (picked) $('setup-rules').textContent = stageRulesText(G.config);
+    if (!relabel) audio.event('ui-confirm');
   }
 
   function setupHosted() {
@@ -511,25 +570,27 @@
   // ---- hosted rooms (StarHermit realtime rooms, host-routed) ----
 
   function setupHostedRooms() {
+    // No setupRedraw here: the lobby has live room state; a language change relabels the static parts.
+    setupRedraw = null;
     const body = ui.el('div');
-    body.appendChild(ui.el('p', 'dim', 'Online 1v1 shootout. Create a match and a friend can quick-join it, or jump straight into any open match.'));
+    body.appendChild(ui.el('p', 'dim', T('Online 1v1 shootout. Create a match and a friend can quick-join it, or jump straight into any open match.')));
     const row = ui.el('div', 'row');
-    const createBtn = ui.el('button', null, 'Create online match');
-    const joinBtn = ui.el('button', null, 'Quick join a match');
+    const createBtn = ui.el('button', null, T('Create online match'));
+    const joinBtn = ui.el('button', null, T('Quick join a match'));
     row.append(createBtn, joinBtn);
     const status = ui.el('p', 'dim', '');
     body.append(row, status);
 
-    const fail = (e) => 'Could not start an online match: ' + (e && e.message ? e.message : e) + ' — solo modes work fine.';
+    const fail = (e) => T('Could not start an online match: {error} — solo modes work fine.', { error: e && e.message ? e.message : e });
 
     createBtn.onclick = async () => {
       createBtn.disabled = true; joinBtn.disabled = true;
-      status.textContent = 'Creating…';
+      status.textContent = T('Creating…');
       try {
         const client = makeRoomsClient();
         await client.createRoom();
         wireRoomsClient(client, 'A');
-        status.textContent = 'Match created — waiting for an opponent to join…';
+        status.textContent = T('Match created — waiting for an opponent to join…');
       } catch (e) {
         createBtn.disabled = false; joinBtn.disabled = false;
         status.textContent = fail(e);
@@ -537,7 +598,7 @@
     };
     joinBtn.onclick = async () => {
       createBtn.disabled = true; joinBtn.disabled = true;
-      status.textContent = 'Looking for an open match…';
+      status.textContent = T('Looking for an open match…');
       try {
         const client = makeRoomsClient();
         const joined = await client.quickJoin();
@@ -545,17 +606,17 @@
           // No open tables: host one ourselves and wait.
           await client.createRoom();
           wireRoomsClient(client, 'A');
-          status.textContent = 'No open match — created one. Waiting for an opponent…';
+          status.textContent = T('No open match — created one. Waiting for an opponent…');
           return;
         }
         wireRoomsClient(client, 'B');
-        status.textContent = 'Joined — waiting for the host to start…';
+        status.textContent = T('Joined — waiting for the host to start…');
       } catch (e) {
         createBtn.disabled = false; joinBtn.disabled = false;
         status.textContent = fail(e);
       }
     };
-    ui.setupView('Online Match', 'Private 1v1 shootout · host-authoritative · reconnect supported', body);
+    ui.setupView(T('Online Match'), T('Private 1v1 shootout · host-authoritative · reconnect supported'), body);
     $('btn-start-match').disabled = true; // the match begins when an opponent joins
     audio.event('ui-confirm');
   }
@@ -576,8 +637,8 @@
     G.match = null;
     G.lastHostedState = null;
     G.lastHostedWaiting = null;
-    G.config = { modeLabel: 'Online Match', rounds: 5, aiDifficulty: 1, goal: 'win', constraints: null, seed: 0 };
-    ui.announce(side === 'A' ? 'Online match created. You are the host.' : 'Joined an online match.');
+    G.config = { modeLabel: () => T('Online Match'), rounds: 5, aiDifficulty: 1, goal: 'win', constraints: null, seed: 0 };
+    ui.announce(side === 'A' ? T('Online match created. You are the host.') : T('Joined an online match.'));
   }
 
   function onRoomsEvent(op, msg) {
@@ -587,20 +648,30 @@
       case 'start': beginRoomsMatch(); break;
       case 'snap': onRoomsSnap(msg); break;
       case 'cmd-rejected':
-        ui.alertUser('Rejected: ' + (msg.error || 'command'));
+        ui.alertUser(T('Rejected: {reason}', { reason: explainReason(msg.error || 'rejected') }));
         audio.event('invalid');
         refreshRoomsHud();
         break;
       case 'result': onRoomsResult(msg); break;
       case 'peer-left': onRoomsPeerLeft(msg); break;
       case 'disconnected':
-        ui.alertUser('Connection to the match was lost.');
+        ui.alertUser(T('Connection to the match was lost.'));
         leaveToTitle();
         break;
-      case 'auth-lost':
-        // Launch token dead: reconnecting stopped; offer a fresh launch.
+      case 'unavailable':
+        // The room is gone (finished, closed or expired): reconnecting stopped.
         leaveToTitle();
-        ui.alertUser(SH_TEXT.expiredTitle);
+        ui.alertUser(T('The online match is no longer available.'));
+        ui.toast(T('The online match is no longer available.'));
+        break;
+      case 'auth-lost':
+      case 'terms-required':
+        // Launch token dead or updated terms need consent: reconnecting
+        // stopped; offer a fresh launch through StarHermit.
+        leaveToTitle();
+        expiredReason = op === 'terms-required' ? 'terms' : 'expired';
+        labelAccount();
+        ui.alertUser(expiredReason === 'terms' ? SHT().termsTitle : SHT().expiredTitle);
         ui.openOverlay('overlay-expired');
         break;
     }
@@ -628,8 +699,7 @@
     const h = G.hosted;
     if (!h || !h.client || !msg.state) return;
     if (h.lastTick >= 0 && msg.state.tick > h.lastTick + 1) {
-      ui.announce('While you were away: ' + (msg.state.tick - h.lastTick) + ' actions were played. Score ' +
-        msg.state.scoreA + '–' + msg.state.scoreB + '.');
+      ui.announce(T('While you were away: {n} actions were played. Score {a}–{b}.', { n: msg.state.tick - h.lastTick, a: msg.state.scoreA, b: msg.state.scoreB }));
     }
     h.lastTick = msg.state.tick;
     G.lastHostedState = msg.state;
@@ -646,7 +716,7 @@
       onDone: () => {
         G.resolving = false;
         setAppState('active');
-        const word = ev.outcome === 'goal' ? 'GOAL' : ev.outcome === 'saved' ? 'SAVED' : 'OFF TARGET';
+        const word = ev.outcome === 'goal' ? T('GOAL') : ev.outcome === 'saved' ? T('SAVED') : T('OFF TARGET');
         ui.announce(word + ' — ' + describeKick(ev));
         audio.event(ev.outcome === 'goal' ? 'goal' : ev.outcome === 'saved' ? 'save' : 'offtarget');
         if (ev.outcome === 'goal') haptic([20, 40, 20]);
@@ -663,8 +733,8 @@
   function roomsConfirm() {
     const h = G.hosted, st = currentState();
     if (!h || !st || !h.client) return;
-    if (G.lastHostedWaiting !== h.side) { ui.alertUser('Waiting for opponent.'); return; }
-    if (!G.sel.zone) { ui.alertUser('Pick a goal zone first.'); return; }
+    if (G.lastHostedWaiting !== h.side) { ui.alertUser(T('Waiting for opponent.')); return; }
+    if (!G.sel.zone) { ui.alertUser(T('Pick a goal zone first.')); return; }
     const type = st.phase === 'keeper' ? 'dive' : 'shoot';
     const params = st.phase === 'keeper'
       ? { dir: G.sel.zone.dir, height: G.sel.zone.height, timing: G.sel.timing }
@@ -674,7 +744,7 @@
     if (h.client.isHost) {
       const res = h.client.hostApplyCommand({ type: type, player: 'A', params: params });
       if (!res.ok) {
-        ui.alertUser('Invalid action: ' + explainReason(res.reason));
+        ui.alertUser(T('Invalid action: {reason}', { reason: explainReason(res.reason) }));
         audio.event('invalid');
         refreshRoomsHud();
         return;
@@ -687,7 +757,7 @@
       });
       G.sel.zone = null;
       ui.setPanels('wait');
-      ui.setWaitText('Waiting for opponent…');
+      setWait(() => T('Waiting for opponent…'));
     }
   }
 
@@ -698,13 +768,14 @@
     const won = st.winner === h.side;
     audio.event('whistle-end');
     audio.event(won ? 'win' : 'lose');
+    const away = h.side !== 'A';
     ui.renderResults({
-      headline: won ? 'You win!' : 'You lose',
-      nameA: 'You' + (h.side === 'A' ? '' : ' (away)'),
-      nameB: 'Opponent',
+      headline: () => (won ? T('You win!') : T('You lose')),
+      nameA: () => (away ? T('You (away)') : T('You')),
+      nameB: () => T('Opponent'),
       breakdown: rules.breakdown(st),
       newAchievements: [],
-      next: 'Authoritative result recorded by the room host.'
+      next: () => T('Authoritative result recorded by the room host.')
     });
     setAppState('results');
   }
@@ -715,25 +786,27 @@
     if (G.lastHostedState && G.lastHostedState.over) return;
     const r = msg.result || msg;
     G.lastHostedState = null;
+    const won = r.winner === (G.hosted && G.hosted.side);
     ui.renderResults({
-      headline: (r.winner === (G.hosted && G.hosted.side)) ? 'You win!' : 'You lose',
-      nameA: 'Player A', nameB: 'Player B',
+      headline: () => (won ? T('You win!') : T('You lose')),
+      nameA: () => T('Player A'), nameB: () => T('Player B'),
       breakdown: r.breakdown || null,
       newAchievements: [],
-      next: 'Authoritative result recorded by the room host.'
+      next: () => T('Authoritative result recorded by the room host.')
     });
     setAppState('results');
   }
 
   function onRoomsPeerLeft(msg) {
     if (G.lastHostedState && G.lastHostedState.over) return;
-    ui.announce(msg.seat === 'A' ? 'The host left — the match ended.' : 'Your opponent left — the match ended.');
+    const hostLeft = msg.seat === 'A';
+    ui.announce(hostLeft ? T('The host left — the match ended.') : T('Your opponent left — the match ended.'));
     ui.renderResults({
-      headline: 'Match ended',
-      nameA: 'You', nameB: 'Opponent',
+      headline: () => T('Match ended'),
+      nameA: () => T('You'), nameB: () => T('Opponent'),
       breakdown: G.lastHostedState ? rules.breakdown(G.lastHostedState) : null,
       newAchievements: [],
-      next: msg.seat === 'A' ? 'The host left the room.' : 'Your opponent left the room.'
+      next: () => (hostLeft ? T('The host left the room.') : T('Your opponent left the room.'))
     });
     setAppState('results');
   }
@@ -750,13 +823,13 @@
     G.mode = 'learn';
     G.learnStep = 0;
     G.hotseat = false;
-    G.config = { seed: 0x1EAA47, rounds: 3, aiDifficulty: 0, goal: 'win', modeLabel: 'Learn' };
+    G.config = { seed: 0x1EAA47, rounds: 3, aiDifficulty: 0, goal: 'win', modeLabel: () => T('Learn') };
     startMatch();
   }
 
   function learnInstruction() {
     const step = content.TUTORIAL_STEPS[G.learnStep];
-    return step ? (step.title + ' — ' + step.body) : null;
+    return step ? (T(step.title) + ' — ' + T(step.body)) : null;
   }
 
   function advanceLearn(performed) {
@@ -769,9 +842,9 @@
       if (G.learnStep >= content.TUTORIAL_STEPS.length) {
         const s = ui.getSettings();
         s.tutorialDone = true; ui.saveSettings();
-        ui.announce('Tutorial complete. You know every rule — play a match whenever you like.');
+        ui.announce(T('Tutorial complete. You know every rule — play a match whenever you like.'));
       } else {
-        ui.announce('Step complete. ' + content.TUTORIAL_STEPS[G.learnStep].title);
+        ui.announce(T('Step complete. {title}', { title: T(content.TUTORIAL_STEPS[G.learnStep].title) }));
       }
       refreshHud();
     }
@@ -779,7 +852,7 @@
 
   // ---------- match lifecycle ----------
   function startConfiguredMatch() {
-    if (!G.config) { ui.alertUser('Pick an option first.'); return; }
+    if (!G.config) { ui.alertUser(T('Pick an option first.')); return; }
     setAppState('preparing');
     G.mode = G.config.daily ? 'daily' : G.config.stage ? 'journey' : G.config.challenge ? 'challenge' : G.config.practice ? 'practice' : 'play';
     startMatch();
@@ -812,16 +885,17 @@
     ui.show('screen-play');
     ui.setPanels('wait');
     let n = 3;
-    const label = G.mode === 'learn' ? 'Learn' : (G.config.modeLabel || 'Match');
+    const label = () => (G.mode === 'learn' ? T('Learn') : (ml(G.config) || T('Match')));
     const step = () => {
       if (n > 0) {
-        ui.setWaitText(label + ' — ' + n);
-        ui.announce(label + ' starting in ' + n);
+        const k = n;
+        setWait(() => label() + ' — ' + k);
+        ui.announce(T('{label} starting in {n}', { label: label(), n: n }));
         audio.event('tick');
         n--;
         G.countdownTimer = setTimeout(step, 700);
       } else {
-        ui.setWaitText('Play!');
+        setWait(() => T('Play!'));
         G.countdownTimer = setTimeout(done, 350);
       }
     };
@@ -855,11 +929,11 @@
     if (cur.phase === 'keeper') {
       ui.setPanels('dive');
       render.setView('keep');
-      ui.announce((G.hotseat ? keeperName(cur) + ': guard the goal' : 'You are keeping') + '. Pick a zone and timing.');
+      ui.announce(G.hotseat ? T('{name}: guard the goal. Pick a zone and timing.', { name: keeperName(cur) }) : T('You are keeping. Pick a zone and timing.'));
     } else {
       ui.setPanels('shoot');
       render.setView('shoot');
-      ui.announce((G.hotseat ? shooterName(cur) + ': take the kick' : 'Your kick') + '. Pick a zone, curve if you like, confirm.');
+      ui.announce(G.hotseat ? T('{name}: take the kick. Pick a zone, curve if you like, confirm.', { name: shooterName(cur) }) : T('Your kick. Pick a zone, curve if you like, confirm.'));
     }
     armDecisionTimer();
     refreshHud();
@@ -875,8 +949,8 @@
     return null;
   }
 
-  function keeperName(st) { return (rules.keeperSide(st) === 'A' ? 'Player A' : 'Player B'); }
-  function shooterName(st) { return st.shooter === 'A' ? 'Player A' : 'Player B'; }
+  function keeperName(st) { return (rules.keeperSide(st) === 'A' ? T('Player A') : T('Player B')); }
+  function shooterName(st) { return st.shooter === 'A' ? T('Player A') : T('Player B'); }
 
   function armDecisionTimer() {
     clearDecisionTimer();
@@ -910,7 +984,7 @@
       G.sel.zone = first ? { dir: first.params.dir, height: first.params.height } : { dir: 'center', height: 'low' };
       G.sel.curve = 'none';
     }
-    ui.announce('Time expired — default choice committed.');
+    ui.announce(T('Time expired — default choice committed.'));
     confirmSelection();
   }
 
@@ -918,8 +992,8 @@
   function resetSelection() {
     G.sel = { zone: null, curve: 'none', timing: 'on' };
     markSeg('curve', 'none'); markSeg('timing', 'on');
-    ui.setSelection('shoot', 'No zone selected', false);
-    ui.setSelection('dive', 'No zone selected', false);
+    ui.setSelection('shoot', T('No zone selected'), false);
+    ui.setSelection('dive', T('No zone selected'), false);
     render.showZoneHighlight(null);
   }
 
@@ -938,7 +1012,7 @@
       // validate against constraints for immediate explanation
       const test = rules.isLegalShot(st, { dir: zone.dir, height: zone.height, curve: G.sel.curve });
       if (!test.ok) {
-        ui.alertUser('Invalid target: ' + explainReason(test.reason));
+        ui.alertUser(T('Invalid target: {reason}', { reason: explainReason(test.reason) }));
         audio.event('invalid');
         return;
       }
@@ -953,7 +1027,7 @@
 
   function onZoneHover(zone) {
     if (G.appState !== 'active' || G.resolving) return;
-    if (zone) ui.announce('Zone ' + zone.dir + ' ' + zone.height);
+    if (zone) ui.announce(T('Zone {zone}', { zone: zoneName(zone) }));
   }
 
   function updateSelectionUi() {
@@ -967,8 +1041,8 @@
     });
     if (st.phase === 'keeper') {
       ui.setSelection('dive', G.sel.zone
-        ? 'Dive ' + G.sel.zone.dir + ' ' + G.sel.zone.height + ' · ' + G.sel.timing
-        : 'No zone selected', !!G.sel.zone);
+        ? T('Dive {zone} · {timing}', { zone: zoneName(G.sel.zone), timing: w(G.sel.timing) })
+        : T('No zone selected'), !!G.sel.zone);
     } else {
       let ok = !!G.sel.zone, why = '';
       if (G.sel.zone) {
@@ -976,26 +1050,26 @@
         ok = test.ok; why = test.ok ? '' : ' — ' + explainReason(test.reason);
       }
       ui.setSelection('shoot', G.sel.zone
-        ? 'Shot ' + G.sel.zone.dir + ' ' + G.sel.zone.height + (G.sel.curve !== 'none' ? ' · curve ' + G.sel.curve : '') + why
-        : 'No zone selected', ok);
+        ? T('Shot {zone}', { zone: zoneName(G.sel.zone) }) + (G.sel.curve !== 'none' ? ' · ' + T('curve {dir}', { dir: w(G.sel.curve) }) : '') + why
+        : T('No zone selected'), ok);
     }
   }
 
-  function explainReason(r) {
-    return {
-      'column-banned': 'that column is banned in this challenge',
-      'height-banned': 'that height is banned in this challenge',
-      'curve-banned': 'that curve is banned in this challenge',
-      'bad-direction': 'unknown direction', 'bad-height': 'unknown height',
-      'bad-curve': 'unknown curve', 'bad-timing': 'unknown timing',
-      'out-of-turn': 'not your turn', 'match-over': 'the match is over'
-    }[r] || r;
-  }
+  const REASONS = {
+    'column-banned': 'that column is banned in this challenge',
+    'height-banned': 'that height is banned in this challenge',
+    'curve-banned': 'that curve is banned in this challenge',
+    'bad-direction': 'unknown direction', 'bad-height': 'unknown height',
+    'bad-curve': 'unknown curve', 'bad-timing': 'unknown timing',
+    'out-of-turn': 'not your turn', 'match-over': 'the match is over',
+    'not-your-side': 'not your side', 'rejected': 'command rejected'
+  };
+  function explainReason(r) { return REASONS[r] ? T(REASONS[r]) : r; }
 
   function confirmSelection() {
     if (G.appState !== 'active' || G.resolving || G.paused || !G.match) return;
     const st = session.snapshot(G.match);
-    if (!G.sel.zone) { ui.alertUser('Pick a goal zone first.'); audio.event('invalid'); return; }
+    if (!G.sel.zone) { ui.alertUser(T('Pick a goal zone first.')); audio.event('invalid'); return; }
     clearDecisionTimer();
     let res, performed;
     if (st.phase === 'keeper') {
@@ -1007,7 +1081,7 @@
       performed = 'shoot';
     }
     if (!res.ok) {
-      ui.alertUser('Invalid action: ' + explainReason(res.reason));
+      ui.alertUser(T('Invalid action: {reason}', { reason: explainReason(res.reason) }));
       audio.event('invalid');
       refreshHud();
       return;
@@ -1033,7 +1107,7 @@
       onDone: () => {
         G.resolving = false;
         setAppState('active');
-        const word = ev.outcome === 'goal' ? 'GOAL' : ev.outcome === 'saved' ? 'SAVED' : 'OFF TARGET';
+        const word = ev.outcome === 'goal' ? T('GOAL') : ev.outcome === 'saved' ? T('SAVED') : T('OFF TARGET');
         ui.announce(word + ' — ' + describeKick(ev));
         audio.event(ev.outcome === 'goal' ? 'goal' : ev.outcome === 'saved' ? 'save' : 'offtarget');
         if (ev.outcome === 'goal') haptic([20, 40, 20]);
@@ -1049,10 +1123,10 @@
   }
 
   function describeKick(ev) {
-    const who = ev.shooter === 'A' ? (G.hotseat ? 'Player A' : 'You') : (G.hotseat ? 'Player B' : 'Rival');
-    return who + ' shot ' + ev.shot.dir + ' ' + ev.shot.height +
-      (ev.shot.curve !== 'none' ? ' with ' + ev.shot.curve + ' curve' : '') +
-      '; keeper went ' + ev.dive.dir + ' ' + ev.dive.height + ' (' + ev.dive.timing + ')';
+    const who = ev.shooter === 'A' ? (G.hotseat ? T('Player A') : T('You')) : (G.hotseat ? T('Player B') : T('Rival'));
+    return T(ev.shot.curve !== 'none' ? '{who} shot {zone} with {curve} curve; keeper went {dive} ({timing})' : '{who} shot {zone}; keeper went {dive} ({timing})', {
+      who: who, zone: zoneName(ev.shot), curve: w(ev.shot.curve), dive: zoneName(ev.dive), timing: w(ev.dive.timing)
+    });
   }
 
   function skipAnim() {
@@ -1066,13 +1140,13 @@
     if (res.ok) {
       render.resetPositions();
       audio.event('ui-back');
-      ui.announce('Undone.');
+      ui.announce(T('Undone.'));
       G.resolving = false;
       setAppState('active');
       refreshHud();
       pumpTurn();
     } else {
-      ui.alertUser('Nothing to undo.');
+      ui.alertUser(T('Nothing to undo.'));
     }
   }
 
@@ -1092,9 +1166,10 @@
     if (!verify.ok) console.error('replay verification failed', verify);
 
     const humanWon = G.hotseat ? null : st.winner === 'A';
-    const headline = G.hotseat
-      ? (st.winner === 'A' ? 'Player A wins!' : 'Player B wins!')
-      : humanWon ? 'You win!' : 'Rival wins';
+    const hot = G.hotseat;
+    const headline = () => (hot
+      ? (st.winner === 'A' ? T('Player A wins!') : T('Player B wins!'))
+      : humanWon ? T('You win!') : T('Rival wins'));
     audio.event('whistle-end');
     audio.event(humanWon === false ? 'lose' : 'win');
 
@@ -1120,7 +1195,7 @@
       } else save.streak = 0;
     }
 
-    let next = '';
+    let next = () => '';
     let won = humanWon;
 
     if (G.mode === 'journey' && G.config.stage) {
@@ -1129,12 +1204,13 @@
         if (save.journeyDone.indexOf(stg.id) < 0) save.journeyDone.push(stg.id);
         if (save.journeyDone.length >= 10) unlock('journey_10');
         if (save.journeyDone.length >= 40) unlock('journey_40');
-        next = save.journeyDone.length < content.JOURNEY.length
-          ? 'Next recommended: Stage ' + (save.journeyDone.length + 1)
-          : 'Journey complete — try the daily challenge.';
+        const nDone = save.journeyDone.length;
+        next = nDone < content.JOURNEY.length
+          ? () => T('Next recommended: Stage {n}', { n: nDone + 1 })
+          : () => T('Journey complete — try the daily challenge.');
         won = true;
       } else {
-        next = 'Goal not met (' + stg.goal.replace('-', ' ') + '). Retry the stage.';
+        next = () => T('Goal not met ({goal}). Retry the stage.', { goal: T(GOAL[stg.goal] || stg.goal) });
         won = false;
       }
       ui.setJourneyProgress(save.journeyDone.length, content.JOURNEY.length);
@@ -1148,11 +1224,11 @@
         if (save.stats.dailies >= 7) unlock('daily_7');
         showDailyBoard();
       }
-      next = 'Next daily arrives at 00:00 UTC.';
+      next = () => T('Next daily arrives at 00:00 UTC.');
     }
 
     if (G.mode === 'learn') {
-      next = 'Tutorial done — Quick Match is one tap away on the menu.';
+      next = () => T('Tutorial done — Quick Match is one tap away on the menu.');
       won = humanWon;
     }
 
@@ -1161,34 +1237,43 @@
     ui.setProfileLine(profileLine());
     funnel('round-end', { mode: G.mode, won: !!won });
 
-    ui.renderResults({
+    const hash = rules.hashState(st);
+    const results = {
       headline: headline,
-      nameA: G.hotseat ? 'Player A' : 'You',
-      nameB: G.hotseat ? 'Player B' : 'Rival',
+      nameA: () => (hot ? T('Player A') : T('You')),
+      nameB: () => (hot ? T('Player B') : T('Rival')),
       breakdown: env.result ? env.result.breakdown : rules.breakdown(st),
       elapsedMs: env.result ? env.result.elapsedMs : 0,
       newAchievements: newAch,
       next: next,
-      extra: 'Replay verified: ' + (verify.ok ? 'yes' : 'NO — ' + verify.reason) +
-        ' · final hash ' + rules.hashState(st)
-    });
-    postToLeaderboard(st.scoreA);
+      extra: () => (verify.ok ? T('Replay verified: yes · final hash {hash}', { hash: hash })
+        : T('Replay verified: NO — {reason} · final hash {hash}', { reason: verify.reason, hash: hash }))
+    };
+    postToLeaderboard(st.scoreA, results);
     setAppState('progression');
   }
 
   // Hosted play only: post a finished match against the AI (Quick Match,
   // Journey, Daily — not hot-seat, Learn or online) to the platform `goals`
   // board and show the player's rank on the results screen.
-  function postToLeaderboard(goals) {
-    if (!platform.hosted() || G.hotseat || ['play', 'journey', 'daily'].indexOf(G.mode) < 0) return;
+  function postToLeaderboard(goals, results) {
+    const post = platform.hosted() && !G.hotseat && ['play', 'journey', 'daily'].indexOf(G.mode) >= 0;
+    const lb = { r: null };
+    // The leaderboard line is a thunk on the results so it follows a language change.
+    if (post) {
+      results.lb = () => {
+        const L = SHT(), r = lb.r;
+        return !r ? L.lbPosting : !r.posted ? L.lbFailed : r.rank ? L.lbRank.replace('{rank}', r.rank) : L.lbPosted;
+      };
+    }
+    ui.renderResults(results);
+    if (!post) return;
     const match = G.match;
-    const line = ui.el('p', null, SH_TEXT.lbPosting);
-    line.id = 'results-lb';
-    line.setAttribute('aria-live', 'polite');
-    ui.$('results-body').appendChild(line);
     platform.submitScore(goals).then(function (r) {
       if (G.match !== match) return;
-      line.textContent = !r.posted ? SH_TEXT.lbFailed : r.rank ? SH_TEXT.lbRank.replace('{rank}', r.rank) : SH_TEXT.lbPosted;
+      lb.r = r;
+      const line = document.getElementById('results-lb');
+      if (line) line.textContent = results.lb();
     });
   }
 
@@ -1204,7 +1289,7 @@
     if (!platform.hosted()) return;
     platform.fetchPlatformLeaderboard({ pageSize: 10 }).then((board) => {
       if (board && board.entries && board.entries.length && ui.currentScreen() === 'screen-results') {
-        ui.appendBoard('Platform board', board.entries, board.me);
+        ui.appendBoard('Platform board', board.entries, board.me); // English key; ui.js translates
       }
     }).catch(() => { /* offline: local record already shown */ });
   }
@@ -1213,7 +1298,7 @@
     if (G.mode === 'hosted') {
       // the hosted session is over server-side; replay as a local quick match
       G.mode = 'play';
-      G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: 'Quick Match' };
+      G.config = { seed: randSeed(), rounds: 5, aiDifficulty: 1, goal: 'win', modeLabel: () => T('Quick Match') };
     }
     if (G.config) { setAppState('preparing'); startMatch(); }
   }
@@ -1223,7 +1308,7 @@
       const done = ui.getSave().journeyDone;
       const nextStage = content.JOURNEY.find(s => done.indexOf(s.id) < 0);
       if (nextStage) {
-        G.config = Object.assign({ modeLabel: 'Journey — ' + nextStage.name, stage: nextStage }, nextStage);
+        G.config = Object.assign({ modeLabel: () => T('Journey — {name}', { name: stageName(nextStage) }), stage: nextStage }, nextStage);
         setAppState('preparing');
         startMatch();
         return;
@@ -1233,6 +1318,7 @@
   }
 
   function leaveToTitle() {
+    setupRedraw = null;
     clearDecisionTimer();
     clearTimeout(G.countdownTimer);
     stopHostedPolling();
@@ -1258,15 +1344,17 @@
     setAppState('paused');
     labelPauseOverlay(true);
     ui.openOverlay('overlay-pause');
-    ui.announce('Paused.');
+    ui.announce(T('Paused.'));
     audio.event('ui-back');
   }
   // The pause overlay doubles as the title's Settings screen: name it for what
   // it is and hide the match-only action when no match is running.
+  let pauseLabelled = false;
   function labelPauseOverlay(paused) {
     const ov = document.getElementById('overlay-pause');
-    document.getElementById('pause-heading').textContent = paused ? 'Paused' : 'Settings';
-    ov.querySelector('[data-action="resume"]').textContent = paused ? 'Resume' : 'Back';
+    pauseLabelled = paused;
+    document.getElementById('pause-heading').textContent = paused ? T('Paused') : T('Settings');
+    ov.querySelector('[data-action="resume"]').textContent = paused ? T('Resume') : T('Back');
     ov.querySelector('[data-action="leave"]').classList.toggle('hidden', !paused);
   }
   function resume() {
@@ -1275,7 +1363,7 @@
     G.paused = false;
     ui.closeOverlay('overlay-pause');
     setAppState('active');
-    ui.announce('Resumed.');
+    ui.announce(T('Resumed.'));
     audio.event('ui-confirm');
 
   }
@@ -1306,12 +1394,12 @@
     const me = G.hosted.side;
     const myTurn = waitingFor === me;
     ui.updateHud(state, {
-      modeLabel: 'Online Match',
-      objective: myTurn ? (state.phase === 'keeper' ? 'Your dive' : 'Your kick') : 'Opponent deciding…',
-      phaseText: 'Score ' + state.scoreA + '–' + state.scoreB + (state.suddenDeath ? ' · sudden death' : '')
+      modeLabel: T('Online Match'),
+      objective: myTurn ? (state.phase === 'keeper' ? T('Your dive') : T('Your kick')) : T('Opponent deciding…'),
+      phaseText: T('Score {a}–{b}', { a: state.scoreA, b: state.scoreB }) + (state.suddenDeath ? ' · ' + T('sudden death') : '')
     });
     ui.setPanels(myTurn ? (state.phase === 'keeper' ? 'dive' : 'shoot') : 'wait');
-    if (!myTurn) ui.setWaitText('Waiting for opponent…');
+    if (!myTurn) setWait(() => T('Waiting for opponent…'));
     render.setView(state.phase === 'keeper' ? 'keep' : 'shoot');
   }
 
@@ -1320,22 +1408,45 @@
     if (!G.match) return;
     const st = session.snapshot(G.match);
     let objective = '';
-    if (G.mode === 'learn') objective = learnInstruction() || 'Tutorial complete — finish the set!';
+    if (G.mode === 'learn') objective = learnInstruction() || T('Tutorial complete — finish the set!');
     else if (G.config && G.config.goal && G.mode !== 'play') {
-      objective = 'Goal: ' + G.config.goal.replace(/-/g, ' ') + ' · ' + (G.config.modeLabel || '');
-    } else objective = G.config ? (G.config.modeLabel || 'Match') : 'Match';
+      objective = T('Goal: {goal}', { goal: T(GOAL[G.config.goal] || G.config.goal) }) + ' · ' + ml(G.config);
+    } else objective = ml(G.config) || T('Match');
     const phaseText = st.phase === 'keeper'
-      ? (G.hotseat ? keeperName(st) + ' keeping' : (rules.keeperSide(st) === 'A' ? 'Your dive' : 'Rival guards'))
-      : (G.hotseat ? shooterName(st) + ' shooting' : (st.shooter === 'A' ? 'Your kick' : 'Rival shoots'));
+      ? (G.hotseat ? T('{name} keeping', { name: keeperName(st) }) : (rules.keeperSide(st) === 'A' ? T('Your dive') : T('Rival guards')))
+      : (G.hotseat ? T('{name} shooting', { name: shooterName(st) }) : (st.shooter === 'A' ? T('Your kick') : T('Rival shoots')));
     ui.updateHud(st, {
-      modeLabel: G.config ? G.config.modeLabel : 'Spot Kick',
+      modeLabel: ml(G.config) || 'Spot Kick',
       objective: objective,
-      phaseText: phaseText + ' · kick ' + Math.min(st.kicksA + st.kicksB + 1, st.rounds * 2) + ' of ' + (st.rounds * 2) +
-        (st.suddenDeath ? ' · SUDDEN DEATH' : '')
+      phaseText: phaseText + ' · ' + T('kick {n} of {total}', { n: Math.min(st.kicksA + st.kicksB + 1, st.rounds * 2), total: st.rounds * 2 }) +
+        (st.suddenDeath ? ' · ' + T('SUDDEN DEATH') : '')
     });
     $('btn-undo').classList.toggle('hidden', G.mode !== 'practice' || G.match.undoStack.length === 0);
     audio.setTension(st.suddenDeath);
     updateSelectionUi();
+  }
+
+  // Wait-panel text as a thunk, so the countdown and "waiting" lines follow a language change.
+  let waitText = null;
+  function setWait(fn) { waitText = fn; ui.setWaitText(fn()); }
+
+  /**
+   * Language change (Settings → Language): static markup is re-applied by
+   * i18n.js; redraw everything built in code from current state — no restart,
+   * no new deal of kicks, no reconnect.
+   */
+  function relocalize() {
+    labelAccount();
+    fillThemeSelect();
+    ui.renderHelp(keyboardBindings());
+    if (window.SpotKickGfxPanel.setLang) window.SpotKickGfxPanel.setLang(gameLang());
+    ui.setProfileLine(profileLine());
+    if (!document.getElementById('overlay-pause').classList.contains('hidden')) labelPauseOverlay(pauseLabelled);
+    if (G.appState === 'mode-select' && setupRedraw && ui.currentScreen() === 'screen-setup') setupRedraw();
+    if (G.hosted && G.lastHostedState) refreshRoomsHud();
+    else if (G.match) refreshHud();
+    if (waitText && !document.getElementById('panel-wait').classList.contains('hidden')) ui.setWaitText(waitText());
+    ui.relabelResults();
   }
 
   // ---------- misc ----------
@@ -1415,6 +1526,7 @@
 
   // boot when DOM ready
   window.SpotKickDebug = { G: G, rules: rules, session: session };
+  document.addEventListener('sk-language', relocalize);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();

@@ -3,8 +3,9 @@
 /*
  * Spot Kick Graphics settings section (inside the Pause/Settings overlay).
  * Builds the controls from the gfx.js model, localizes the panel strings
- * (navigator language; the rest of the game is English), persists through the
- * game's settings store and applies changes live via the renderer.
+ * (the game language from bootstrap.js; setLang() relabels on a change),
+ * persists through the game's settings store and applies changes live via the
+ * renderer.
  */
 (function (root, factory) {
   const api = factory(root.SpotKickGfx);
@@ -100,25 +101,42 @@
 
   function tierLabel(t) { return S.tier[t] || t; }
 
-  function init(o) {
-    opts = o;
-    locale = pickLocale(o.lang);
-    S = LOCALES[locale];
-    const fs = $('gfx-fieldset');
-    if (!fs) return;
-    fs.setAttribute('lang', locale);
+  /** Static labels in the current locale (also on a language change). */
+  function label() {
     $('gfx-legend').textContent = S.graphics;
     $('gfx-quality-label').textContent = S.quality;
     $('gfx-scale-label').textContent = S.renderScale;
     $('gfx-adaptive-label').textContent = S.adaptive;
     $('gfx-fps-label').textContent = S.showFps;
     $('gfx-post-note').textContent = S.postUnavailable;
+    Object.keys(GFX.CATEGORIES).forEach(cat => {
+      const span = document.querySelector('#gfx-categories [data-gfx-label="' + cat + '"]');
+      if (span) span.textContent = S.cat[cat];
+    });
+  }
+
+  /** Follow a game-language change: relabel and refill the option lists in place. */
+  function setLang(lang) {
+    locale = pickLocale(lang);
+    S = LOCALES[locale];
+    if (!$('gfx-fieldset')) return;
+    label();
+    sync();
+  }
+
+  function init(o) {
+    opts = o;
+    locale = pickLocale(o.lang);
+    S = LOCALES[locale];
+    const fs = $('gfx-fieldset');
+    if (!fs) return;
     // one select per category
     const host = $('gfx-categories');
     host.innerHTML = '';
     Object.keys(GFX.CATEGORIES).forEach(cat => {
       const lab = document.createElement('label');
       const span = document.createElement('span');
+      span.dataset.gfxLabel = cat;
       span.textContent = S.cat[cat];
       const sel = document.createElement('select');
       sel.id = 'gfx-' + cat;
@@ -141,6 +159,7 @@
     });
     $('gfx-adaptive').addEventListener('change', (e) => commit(Object.assign({}, opts.getSaved(), { adaptive: e.target.checked })));
     $('gfx-show-fps').addEventListener('change', (e) => commit(Object.assign({}, opts.getSaved(), { show_fps: e.target.checked })));
+    label();
     const ov = $('overlay-pause'); // refresh GPU/size summary whenever settings open
     if (ov && typeof MutationObserver === 'function') {
       new MutationObserver(() => { if (!ov.classList.contains('hidden')) sync(); }).observe(ov, { attributes: true, attributeFilter: ['class'] });
@@ -199,5 +218,5 @@
     $('gfx-post-note').classList.toggle('hidden', !(info.postFailed || (!info.postAvailable && r.post)));
   }
 
-  return { init: init, sync: sync, refreshSummary: refreshSummary, pickLocale: pickLocale, LOCALES: LOCALES };
+  return { init: init, sync: sync, setLang: setLang, refreshSummary: refreshSummary, pickLocale: pickLocale, LOCALES: LOCALES };
 });
