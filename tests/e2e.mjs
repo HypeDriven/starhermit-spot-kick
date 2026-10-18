@@ -530,6 +530,7 @@ async function runGraphics(browser, name, ctxOpts) {
     const r = await page.evaluate(() => window.SpotKickRender.graphicsInfo().resolved);
     if (r.bloom !== 'off' || r.preset !== 'high') throw new Error(`bloom override not applied: ${JSON.stringify(r)}`);
     await page.locator('#gfx-fieldset').screenshot({ path: SHOT('graphics', name) });
+    if (!/ · Level 0 · /.test((await state()).summary)) throw new Error(`summary lacks the hardware level: ${(await state()).summary}`);
     ok(`${name}: bloom override applied (${(await state()).summary})`);
 
     // survives reload

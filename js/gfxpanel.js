@@ -14,7 +14,7 @@
 })(typeof self !== 'undefined' ? self : this, function (GFX) {
 
   const EN = {
-    graphics: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {t})', renderScale: 'Render scale',
+    graphics: 'Graphics', quality: 'Quality', level: 'Level {n}', auto: 'Auto (detected: {t})', renderScale: 'Render scale',
     fromPreset: 'From preset ({t})', adaptive: 'Adaptive resolution', showFps: 'Show frame rate',
     postUnavailable: 'Post-processing is unavailable here; the game renders without it.',
     preset: { low: 'Low', balanced: 'Balanced', high: 'High', ultra: 'Ultra' },
@@ -29,7 +29,7 @@
     return o;
   };
   const ES = ext(EN, {
-    graphics: 'Gráficos', quality: 'Calidad', auto: 'Automática (detectada: {t})', renderScale: 'Escala de renderizado',
+    graphics: 'Gráficos', quality: 'Calidad', level: 'Nivel {n}', auto: 'Automática (detectada: {t})', renderScale: 'Escala de renderizado',
     fromPreset: 'Según el ajuste ({t})', adaptive: 'Resolución adaptativa', showFps: 'Mostrar cuadros por segundo',
     postUnavailable: 'El posprocesado no está disponible aquí; el juego se dibuja sin él.',
     preset: { low: 'Baja', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra' },
@@ -39,7 +39,7 @@
   });
   const ES_ES = ext(ES, { showFps: 'Mostrar fotogramas por segundo', cat: { atmosphere: 'Ambiente de focos' } });
   const FR = ext(EN, {
-    graphics: 'Graphismes', quality: 'Qualité', auto: 'Auto (détectée : {t})', renderScale: 'Échelle de rendu',
+    graphics: 'Graphismes', quality: 'Qualité', level: 'Niveau {n}', auto: 'Auto (détectée : {t})', renderScale: 'Échelle de rendu',
     fromPreset: 'Selon le préréglage ({t})', adaptive: 'Résolution adaptative', showFps: 'Afficher les images par seconde',
     postUnavailable: 'Le post-traitement est indisponible ici ; le jeu s’affiche sans.',
     preset: { low: 'Basse', balanced: 'Équilibrée', high: 'Haute', ultra: 'Ultra' },
@@ -56,7 +56,7 @@
     'fr-FR': FR,
     'fr-CA': FR_CA,
     'de-DE': ext(EN, {
-      graphics: 'Grafik', quality: 'Qualität', auto: 'Automatisch (erkannt: {t})', renderScale: 'Renderskalierung',
+      graphics: 'Grafik', quality: 'Qualität', level: 'Stufe {n}', auto: 'Automatisch (erkannt: {t})', renderScale: 'Renderskalierung',
       fromPreset: 'Wie Voreinstellung ({t})', adaptive: 'Adaptive Auflösung', showFps: 'Bildrate anzeigen',
       postUnavailable: 'Nachbearbeitung ist hier nicht verfügbar; das Spiel wird ohne sie dargestellt.',
       preset: { low: 'Niedrig', balanced: 'Ausgewogen', high: 'Hoch', ultra: 'Ultra' },
@@ -65,7 +65,7 @@
       tier: { off: 'Aus', on: 'Ein', low: 'Niedrig', medium: 'Mittel', high: 'Hoch', plain: 'Einfach', detailed: 'Detailliert', sparse: 'Spärlich', full: 'Voll' }
     }),
     'pt-BR': ext(EN, {
-      graphics: 'Gráficos', quality: 'Qualidade', auto: 'Automático (detectado: {t})', renderScale: 'Escala de renderização',
+      graphics: 'Gráficos', quality: 'Qualidade', level: 'Nível {n}', auto: 'Automático (detectado: {t})', renderScale: 'Escala de renderização',
       fromPreset: 'Da predefinição ({t})', adaptive: 'Resolução adaptativa', showFps: 'Mostrar taxa de quadros',
       postUnavailable: 'O pós-processamento não está disponível aqui; o jogo é exibido sem ele.',
       preset: { low: 'Baixo', balanced: 'Equilibrado', high: 'Alto', ultra: 'Ultra' },
@@ -74,7 +74,7 @@
       tier: { off: 'Desligado', on: 'Ligado', low: 'Baixo', medium: 'Médio', high: 'Alto', plain: 'Simples', detailed: 'Detalhado', sparse: 'Esparsa', full: 'Cheia' }
     }),
     'it-IT': ext(EN, {
-      graphics: 'Grafica', quality: 'Qualità', auto: 'Automatica (rilevata: {t})', renderScale: 'Scala di rendering',
+      graphics: 'Grafica', quality: 'Qualità', level: 'Livello {n}', auto: 'Automatica (rilevata: {t})', renderScale: 'Scala di rendering',
       fromPreset: 'Dal preset ({t})', adaptive: 'Risoluzione adattiva', showFps: 'Mostra frequenza fotogrammi',
       postUnavailable: 'La post-elaborazione non è disponibile qui; il gioco viene mostrato senza.',
       preset: { low: 'Bassa', balanced: 'Bilanciata', high: 'Alta', ultra: 'Ultra' },
@@ -214,7 +214,7 @@
       r.reflections === 'on' ? S.cat.reflections : null,
       r.antialias === 'off' ? S.cat.antialias + ': ' + S.tier.off : r.antialias.toUpperCase()
     ].filter(Boolean);
-    $('gfx-summary').textContent = [info.gpu, parts.join(', '), info.pixels[0] + '×' + info.pixels[1] + ' px'].join(' · ');
+    $('gfx-summary').textContent = [info.gpu, info.level != null ? S.level.replace('{n}', info.level) : null, parts.join(', '), info.pixels[0] + '×' + info.pixels[1] + ' px'].filter(Boolean).join(' · ');
     $('gfx-post-note').classList.toggle('hidden', !(info.postFailed || (!info.postAvailable && r.post)));
   }
 

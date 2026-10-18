@@ -26,7 +26,7 @@
     CAM_TRANS_MS: 900,
     PLAY_CENTER: { x: 0, z: 5.5 },     // shadow frustum is fitted around the goal↔spot area
     PLAY_HALF: 8.5,
-    CROWD_FULL: 1100, CROWD_SPARSE: 220
+    CROWD_FULL: GFX.CROWD_MAX, CROWD_SPARSE: GFX.CROWD_SPARSE // seats built at the largest budget; the preset draws a prefix
   };
 
   const LAYER_ENV = 0, LAYER_GAME = 1, LAYER_FX = 2;
@@ -51,7 +51,7 @@
   let built = false, webglOk = true;
 
   // graphics state
-  let gpuName = '', detectedPreset = 'balanced', ctxMSAA = true;
+  let gpuName = '', gpuLevel = 4, detectedPreset = 'balanced', ctxMSAA = true;
   let savedGfx = {}, gfx = GFX.resolve({}, 'balanced');
   let composer = null, postKey = null, postFailed = false, gradePass = null;
   let envTex = null;
@@ -81,8 +81,15 @@
     gpuName = detectGpu(renderer.getContext());
     const mobile = !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches) ||
       /Mobi|Android|iPhone|iPad/i.test((root.navigator && root.navigator.userAgent) || '');
-    detectedPreset = GFX.detectPreset(gpuName, { mobile: mobile });
-    gfx = GFX.resolve(savedGfx, detectedPreset);
+    // StarHermit hardware level (js/gpu-level.js): renderer string + device facts (phone/tablet, cores, memory).
+    let sys = { mobile: mobile, webgl2: !!renderer.capabilities.isWebGL2 };
+    try {
+      const SG = root.StarHermitGpu;
+      if (SG) { const d = SG.detectSystem(); sys = Object.assign(sys, { mobile: mobile || d.mobile, touch: d.touch, screen: d.screen, cores: d.cores, memoryGb: d.memoryGb, astc: d.astc }); }
+    } catch (_) { /* defaults */ }
+    gpuLevel = GFX.detectLevel(gpuName, sys);
+    detectedPreset = GFX.presetForLevel(gpuLevel);
+    gfx = GFX.resolve(savedGfx, detectedPreset, gpuLevel);
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(46, 16 / 9, 0.1, 220);
     // the camera must see every layer: environment, gameplay pieces (ball,
@@ -135,6 +142,25 @@
     t.anisotropy = 4;
     return t;
   }
+
+  // ---------- per-preset assets (gfx.js BUDGETS) ----------
+  // Shading model for a lit surface: Lambert (Low), Standard (Balanced) or Physical (High, Ultra). Surfaces
+  // authored as Physical (clear-coated posts, ball, gloves) step down; plain Standard ones become Lambert
+  // on Low only. PBR-only parameters are dropped where the model has none.
+  let built4 = null; // the budget the scene was built with
+  function litMat(params, physical) {
+    const tier = (built4 || gfx.budget).material;
+    const p = Object.assign({}, params);
+    if (tier === 'lambert') {
+      for (const k of ['roughness', 'metalness', 'envMapIntensity', 'clearcoat', 'clearcoatRoughness']) delete p[k];
+      return new THREE.MeshLambertMaterial(p);
+    }
+    if (!(physical && tier === 'physical')) { delete p.clearcoat; delete p.clearcoatRoughness; return new THREE.MeshStandardMaterial(p); }
+    return new THREE.MeshPhysicalMaterial(p);
+  }
+  // Curved-mesh segment count at the preset's multiplier.
+  function sg(n, min) { return Math.max(min || 3, Math.round(n * (built4 || gfx.budget).seg)); }
+  const assetKey = (b) => [b.material, b.pitch, b.ball, b.seg].join('|');
 
   // ---------- static batching: one draw call per material for fixed props ----------
   let statics = new Map();
@@ -190,6 +216,7 @@
 
   function buildScene(themeDef) {
     theme = themeDef;
+    built4 = gfx.budget;
     if (scene) { dispose(scene); scene.clear(); }
     zones = []; halos = []; mats = {};
     const horizon = new THREE.Color(theme.sky).lerp(new THREE.Color(theme.accent), 0.12).multiplyScalar(1.9);
@@ -237,7 +264,9 @@
 
   function buildPitch(t) {
     // mowing stripes (5 m bands along the pitch) with fine turf noise
-    tex.pitch = canvasTex(256, 256, (g, w, h) => {
+    const pz = built4.pitch; // authored at 256 px, drawn into the preset's texture budget
+    tex.pitch = canvasTex(pz, pz, (g, w, h) => {
+      g.scale(w / 256, h / 256); w = 256; h = 256;
       const rnd = lcg(0x51a7);
       for (let b = 0; b < 2; b++) {
         g.fillStyle = shade(t.pitch, b ? 1.16 : 0.9);
@@ -250,7 +279,7 @@
       }
     });
     if (tex.pitch) { tex.pitch.wrapS = tex.pitch.wrapT = THREE.RepeatWrapping; tex.pitch.repeat.set(8, 12); }
-    mats.pitch = new THREE.MeshStandardMaterial({ color: t.pitch, roughness: 0.95, metalness: 0, envMapIntensity: 0.15 });
+    mats.pitch = litMat({ color: t.pitch, roughness: 0.95, metalness: 0, envMapIntensity: 0.15 });
     pitch = new THREE.Mesh(new THREE.PlaneGeometry(80, 120), mats.pitch);
     pitch.rotation.x = -Math.PI / 2;
     pitch.position.z = 20;
@@ -259,7 +288,7 @@
     scene.add(pitch);
 
     // pitch markings (lit, so they sit in the scene rather than glow)
-    const lineMat = new THREE.MeshStandardMaterial({ color: t.line, roughness: 0.8, envMapIntensity: 0.1,
+    const lineMat = litMat({ color: t.line, roughness: 0.8, envMapIntensity: 0.1,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     const addLine = (w, h, x, z) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), lineMat);
@@ -273,11 +302,11 @@
     addLine(18.3, 0.1, 0, 16.5);
     addLine(0.1, 5.5, -4.6, 2.75); addLine(0.1, 5.5, 4.6, 2.75); addLine(9.2, 0.1, 0, 5.5);
     addLine(60, 0.1, 0, 0); // goal line
-    const spot = new THREE.Mesh(new THREE.CircleGeometry(0.12, 20), lineMat);
+    const spot = new THREE.Mesh(new THREE.CircleGeometry(0.12, sg(20, 10)), lineMat);
     spot.rotation.x = -Math.PI / 2; spot.position.set(0, 0.012, 11); spot.receiveShadow = true;
     addStatic(spot);
     // penalty arc
-    const arc = new THREE.Mesh(new THREE.RingGeometry(9.1, 9.2, 48, 1, Math.PI * 1.29, Math.PI * 0.42), lineMat);
+    const arc = new THREE.Mesh(new THREE.RingGeometry(9.1, 9.2, sg(48, 24), 1, Math.PI * 1.29, Math.PI * 0.42), lineMat);
     arc.rotation.x = -Math.PI / 2; arc.position.set(0, 0.011, 11); arc.receiveShadow = true;
     addStatic(arc);
 
@@ -333,21 +362,21 @@
 
   function buildGoal(t) {
     goalGroup = new THREE.Group();
-    mats.post = new THREE.MeshPhysicalMaterial({ color: 0xf4f6fa, roughness: 0.32, metalness: 0.0, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 0.6 });
+    mats.post = litMat({ color: 0xf4f6fa, roughness: 0.32, metalness: 0.0, clearcoat: 1, clearcoatRoughness: 0.12, envMapIntensity: 0.6 }, true);
     const postR = 0.06;
     const mk = (geo, x, y, z) => {
       const m = new THREE.Mesh(geo, mats.post);
       m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; m.layers.set(LAYER_GAME);
       addStatic(m); return m;
     };
-    const postGeo = new THREE.CylinderGeometry(postR, postR, FRAME.GOAL_H, 16);
+    const postGeo = new THREE.CylinderGeometry(postR, postR, FRAME.GOAL_H, sg(16, 8));
     mk(postGeo, -FRAME.GOAL_W / 2, FRAME.GOAL_H / 2, FRAME.GOAL_Z);
     mk(postGeo, FRAME.GOAL_W / 2, FRAME.GOAL_H / 2, FRAME.GOAL_Z);
-    const barGeo = new THREE.CylinderGeometry(postR, postR, FRAME.GOAL_W + postR * 2, 16);
+    const barGeo = new THREE.CylinderGeometry(postR, postR, FRAME.GOAL_W + postR * 2, sg(16, 8));
     const bar = mk(barGeo, 0, FRAME.GOAL_H, FRAME.GOAL_Z);
     bar.rotation.z = Math.PI / 2;
     // back stanchions holding the net
-    const stMat = new THREE.MeshStandardMaterial({ color: 0x9aa4b4, roughness: 0.5, metalness: 0.6 });
+    const stMat = litMat({ color: 0x9aa4b4, roughness: 0.5, metalness: 0.6 });
     for (const s of [-1, 1]) {
       const st = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 6), stMat);
       st.position.set(s * FRAME.GOAL_W / 2, 1.1, -1.5); st.rotation.x = 0.43;
@@ -381,32 +410,32 @@
   function buildKeeper(t) {
     keeper = new THREE.Group();
     keeperRig = new THREE.Group(); // idle motion lives here, never on the logical root
-    const kit = new THREE.MeshStandardMaterial({ color: t.accent, roughness: 0.55, envMapIntensity: 0.4 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x151c2b, roughness: 0.7, envMapIntensity: 0.3 });
-    const skin = new THREE.MeshStandardMaterial({ color: 0xd9b38c, roughness: 0.7, envMapIntensity: 0.3 });
-    const glove = new THREE.MeshPhysicalMaterial({ color: 0xf2f4f8, roughness: 0.45, clearcoat: 0.5, envMapIntensity: 0.5 });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.5, 4, 14), kit);
+    const kit = litMat({ color: t.accent, roughness: 0.55, envMapIntensity: 0.4 });
+    const dark = litMat({ color: 0x151c2b, roughness: 0.7, envMapIntensity: 0.3 });
+    const skin = litMat({ color: 0xd9b38c, roughness: 0.7, envMapIntensity: 0.3 });
+    const glove = litMat({ color: 0xf2f4f8, roughness: 0.45, clearcoat: 0.5, envMapIntensity: 0.5 }, true);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.5, sg(4, 2), sg(14, 8)), kit);
     body.position.y = 1.08;
-    const shorts = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.24, 0.26, 14), dark);
+    const shorts = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.24, 0.26, sg(14, 8)), dark);
     shorts.position.y = 0.72;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 14), skin);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, sg(18, 10), sg(14, 8)), skin);
     head.position.y = 1.62;
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.165, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), dark);
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.165, sg(16, 10), sg(8, 5), 0, Math.PI * 2, 0, Math.PI * 0.45), dark);
     hair.position.y = 1.63;
-    const armGeo = new THREE.CapsuleGeometry(0.06, 0.5, 3, 10);
+    const armGeo = new THREE.CapsuleGeometry(0.06, 0.5, sg(3, 2), sg(10, 6));
     const mkArm = (s) => {
       const pivot = new THREE.Group(); pivot.position.set(s * 0.25, 1.36, 0);
       const arm = new THREE.Mesh(armGeo, kit); arm.position.y = -0.28;
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), glove); hand.position.y = -0.6;
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.085, sg(12, 8), sg(10, 6)), glove); hand.position.y = -0.6;
       pivot.add(arm, hand); pivot.rotation.z = s * 2.4; // arms up and out, ready
       pivot.userData.base = pivot.rotation.z;
       return pivot;
     };
     const armL = mkArm(-1), armR = mkArm(1);
-    const legGeo = new THREE.CapsuleGeometry(0.08, 0.5, 3, 10);
+    const legGeo = new THREE.CapsuleGeometry(0.08, 0.5, sg(3, 2), sg(10, 6));
     const legL = new THREE.Mesh(legGeo, dark); legL.position.set(-0.12, 0.36, 0);
     const legR = new THREE.Mesh(legGeo, dark); legR.position.set(0.12, 0.36, 0);
-    const sockGeo = new THREE.CylinderGeometry(0.085, 0.08, 0.26, 10);
+    const sockGeo = new THREE.CylinderGeometry(0.085, 0.08, 0.26, sg(10, 6));
     const sockL = new THREE.Mesh(sockGeo, kit); sockL.position.set(-0.12, 0.2, 0);
     const sockR = new THREE.Mesh(sockGeo, kit); sockR.position.set(0.12, 0.2, 0);
     // static body parts: one mesh per material; arms stay separate for idle motion
@@ -421,7 +450,8 @@
 
   function buildBall(t) {
     // classic panel ball on an equirectangular map
-    tex.ball = canvasTex(512, 256, (g, w, h) => {
+    tex.ball = canvasTex(built4.ball, built4.ball / 2, (g, w, h) => { // authored at 512×256
+      g.scale(w / 512, h / 256); w = 512; h = 256;
       g.fillStyle = '#f4f6fb'; g.fillRect(0, 0, w, h);
       g.fillStyle = '#1b2233';
       const poly = (cx, cy, r, n, rot) => {
@@ -440,8 +470,8 @@
       g.strokeStyle = 'rgba(40,50,70,0.35)'; g.lineWidth = 2;
       for (let k = 0; k < 10; k++) { g.beginPath(); g.moveTo(k * w / 10, 0); g.lineTo(k * w / 10 + 12, h); g.stroke(); }
     });
-    mats.ball = new THREE.MeshPhysicalMaterial({ color: 0xdfe3ea, roughness: 0.5, clearcoat: 0.5, clearcoatRoughness: 0.25, envMapIntensity: 0.4 });
-    ball = new THREE.Mesh(new THREE.SphereGeometry(FRAME.BALL_R, 32, 22), mats.ball);
+    mats.ball = litMat({ color: 0xdfe3ea, roughness: 0.5, clearcoat: 0.5, clearcoatRoughness: 0.25, envMapIntensity: 0.4 }, true);
+    ball = new THREE.Mesh(new THREE.SphereGeometry(FRAME.BALL_R, sg(32, 16), sg(22, 11)), mats.ball);
     ball.castShadow = true;
     ball.position.set(FRAME.SPOT.x, FRAME.SPOT.y, FRAME.SPOT.z);
     ball.userData.home = ball.position.clone();
@@ -463,7 +493,7 @@
   }
 
   function buildStands(t) {
-    const standMat = new THREE.MeshStandardMaterial({ color: 0x141d31, roughness: 0.95, envMapIntensity: 0.1 });
+    const standMat = litMat({ color: 0x141d31, roughness: 0.95, envMapIntensity: 0.1 });
     const ROWS = 11, RISE = 0.75, RUN = 0.9;
     const stands = [{ z: -12.1, dir: -1 }, { z: 38, dir: 1 }];
     for (const s of stands) {
@@ -499,7 +529,7 @@
     const personGeo = new THREE.CapsuleGeometry(0.15, 0.32, 2, 6);
     const personLow = new THREE.CylinderGeometry(0.13, 0.16, 0.62, 5, 1); // sparse tier: ~20 triangles
     const phase = new Float32Array(FRAME.CROWD_FULL);
-    mats.crowd = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, envMapIntensity: 0.1 });
+    mats.crowd = litMat({ color: 0xffffff, roughness: 0.9, envMapIntensity: 0.1 });
     mats.crowd.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = U.uTime; sh.uniforms.uBob = U.uBob;
       sh.vertexShader = 'attribute float aPhase;\nuniform float uTime;\nuniform float uBob;\n' +
@@ -553,7 +583,7 @@
       }
     });
     const lampMat = new THREE.MeshBasicMaterial({ map: tex.lamps, color: new THREE.Color(0xfff6da).multiplyScalar(3.2), fog: false });
-    const towerMat = new THREE.MeshStandardMaterial({ color: 0x2a3144, roughness: 0.6, metalness: 0.5 });
+    const towerMat = litMat({ color: 0x2a3144, roughness: 0.6, metalness: 0.5 });
     tex.halo = canvasTex(64, 64, (g, w, h) => {
       const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
       gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,240,210,0.45)'); gr.addColorStop(1, 'rgba(255,240,210,0)');
@@ -590,13 +620,13 @@
       atmosphere.add(halo);
       const dir = L.lamp.clone().sub(L.target);
       const len = dir.length();
-      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 5.5, len, 28, 1, true), beamMaterial());
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 5.5, len, sg(28, 12), 1, true), beamMaterial());
       beam.position.copy(L.lamp).add(L.target).multiplyScalar(0.5);
       beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
       beam.renderOrder = 2;
       atmosphere.add(beam);
     }
-    const N = 260, pos = new Float32Array(N * 3), base = new Float32Array(N * 3);
+    const N = GFX.MOTE_MAX, pos = new Float32Array(N * 3), base = new Float32Array(N * 3); // the preset draws budget.motes
     const mr = lcg(0x77aa11);
     for (let i = 0; i < N; i++) {
       base[i * 3] = (mr() - 0.5) * 24; base[i * 3 + 1] = 0.4 + mr() * 9; base[i * 3 + 2] = -4 + mr() * 20;
@@ -887,7 +917,8 @@
     if (atmosphere && atmosphere.visible && motes) {
       const p = motes.geometry.attributes.position, b = motes.userData.base, arr = p.array;
       if (moving) {
-        for (let i = 0; i < arr.length; i += 3) {
+        const n = Math.min(arr.length, motes.geometry.drawRange.count * 3);
+        for (let i = 0; i < n; i += 3) {
           const ph = i * 0.37;
           arr[i] = b[i] + Math.sin(ambientT * 0.23 + ph) * 0.9;
           arr[i + 1] = b[i + 1] + Math.sin(ambientT * 0.31 + ph * 1.7) * 0.5;
@@ -914,7 +945,14 @@
   /** Apply saved graphics settings (object from the Graphics panel; {} = auto). Live, no reload. */
   function setGraphics(saved) {
     savedGfx = Object.assign({}, saved || {});
-    gfx = GFX.resolve(savedGfx, detectedPreset);
+    gfx = GFX.resolve(savedGfx, detectedPreset, gpuLevel);
+    // A budget with other materials, textures or mesh detail rebuilds the stadium (ball and keeper keep
+    // their place); crowd and mote counts apply live below.
+    if (built && theme && built4 && assetKey(built4) !== assetKey(gfx.budget)) {
+      const keep = { b: ball.position.clone(), br: ball.rotation.clone(), k: keeper.position.clone(), kr: keeper.rotation.clone() };
+      buildScene(theme);
+      ball.position.copy(keep.b); ball.rotation.copy(keep.br); keeper.position.copy(keep.k); keeper.rotation.copy(keep.kr);
+    }
     adaptiveScale = 1;
     frameTimes = [];
     sizeDirty = true;
@@ -952,11 +990,12 @@
     if (netDetail) netDetail.visible = detailed;
     if (crowd) {
       const full = gfx.crowd === 'full';
-      crowd.count = full ? FRAME.CROWD_FULL : FRAME.CROWD_SPARSE;
+      crowd.count = GFX.crowdCount(gfx);
       crowd.geometry = full ? crowd.userData.geoFull : crowd.userData.geoSparse;
     }
     // atmosphere stays off in the high-contrast theme so nothing hazes the goal
     if (atmosphere) atmosphere.visible = gfx.atmosphere === 'on' && theme.id !== 'mono';
+    if (motes) motes.geometry.setDrawRange(0, Math.min(GFX.MOTE_MAX, gfx.budget.motes));
     applyReflections();
     // materials recompile for shadow / map changes
     scene.traverse(o => {
@@ -991,7 +1030,7 @@
   function graphicsInfo() {
     const px = [Math.round(view.w * pixelRatio), Math.round(view.h * pixelRatio)];
     return {
-      gpu: gpuName || 'unknown GPU', detected: detectedPreset, resolved: gfx,
+      gpu: gpuName || 'unknown GPU', level: gpuLevel, detected: detectedPreset, resolved: gfx,
       summary: GFX.describe(gfx, px), pixels: px,
       fps: Math.round(fps || 0), adaptiveScale: Math.round(adaptiveScale * 100) / 100,
       postFailed: !!postFailed, postAvailable: !!root.SpotKickPost
@@ -1004,7 +1043,7 @@
 
   function currentPostKey() {
     if (!needsPost() || postFailed) return 'none';
-    return [gfx.bloom, gfx.grade, gfx.antialias, view.w, view.h, pixelRatio, !!root.SpotKickPost].join('|');
+    return [gfx.bloom, gfx.grade, gfx.antialias, gfx.budget.bloomRes, view.w, view.h, pixelRatio, !!root.SpotKickPost].join('|');
   }
 
   // Colour grade + vignette (display-space in, display-space out; runs after OutputPass tone mapping).
@@ -1030,6 +1069,15 @@
       }`
   };
 
+  // Run a post pass at a fraction of the frame: EffectComposer.addPass/setSize hand every pass the full
+  // frame size, so the pass's own setSize applies the budget's scale (half-res bloom below Ultra).
+  function atScale(pass, k) {
+    if (!(k < 1)) return pass;
+    const setSize = pass.setSize.bind(pass);
+    pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+    return pass;
+  }
+
   function buildPost() {
     if (composer) { composer.dispose(); composer = null; }
     gradePass = null;
@@ -1047,7 +1095,7 @@
       c.addPass(new P.RenderPass(scene, camera));
       if (gfx.bloom === 'on') {
         // high threshold: only lamp banks and bright highlights bloom
-        c.addPass(new P.UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 0.92));
+        c.addPass(atScale(new P.UnrealBloomPass(new THREE.Vector2(w, h), 0.55, 0.45, 0.92), gfx.budget.bloomRes));
       }
       c.addPass(new P.OutputPass());
       if (gfx.grade === 'on') {
