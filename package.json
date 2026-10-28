@@ -1,21 +1,21 @@
 {
   "name": "spot-kick",
   "version": "1.0.0",
-  "description": "Spot Kick — alternating penalty shootout duel (browser game)",
-  "main": "server.js",
-  "scripts": {
-    "test": "jest",
-    "test:e2e": "node tests/e2e.mjs",
-    "start": "node server.js"
-  },
-  "keywords": [],
-  "author": "",
+  "description": "Spot Kick — alternating penalty shootout duel on the StarHermit engine",
+  "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
-  "dependencies": {
-    "three": "^0.182.0"
+  "scripts": {
+    "test": "npm run test:unit && npm run test:native",
+    "test:unit": "node --test tests/rules.test.js tests/content.test.js tests/session.test.js tests/progress.test.js tests/server.test.js tests/online.test.mjs tests/i18n.test.js",
+    "test:native": "node tests/native.mjs",
+    "test:online": "node tools/online-play.mjs",
+    "test:browser": "node tools/browser-play.mjs .",
+    "package": "node tools/package-web.mjs",
+    "css": "node tools/css.mjs",
+    "server": "node tools/build-server.mjs",
+    "plays": "node tools/gen-plays.mjs"
   },
   "devDependencies": {
-    "jest": "^30.4.2",
     "playwright-core": "^1.63.0"
   }
 }
