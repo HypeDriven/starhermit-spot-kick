@@ -1,0 +1,21 @@
+# Online match on the local platform, the guest's side (bob, a phone): Quick
+# join a match, then play by keys to the result the server script records.
+# viewport 390x844@2
+until 900 =Online Match
+frames 400
+touch =Online Match
+until 300 =Quick join a match
+frames 10
+touch =Quick join a match
+until 3600 =Dive!
+frames 20
+save online-guest-keep
+repeat 60000 until Result recorded by the StarHermit server.
+  key Enter 1
+  frames 6
+  key Enter 1
+  frames 40
+end
+expect =You lose
+frames 30
+save online-guest-results

@@ -1,4 +1,5 @@
 'use strict';
+require('./jest-shim');
 
 const rules = require('../js/rules');
 

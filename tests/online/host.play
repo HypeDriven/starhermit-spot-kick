@@ -1,0 +1,30 @@
+# Online match on the local platform, the host's side (alice): Create online
+# match, wait for bob, then both play by keys (the zone cursor, Enter selects,
+# Enter again kicks / dives; alice curves every shot with E, bob never does,
+# so alice wins) to the result the server script records. No arrows: on the
+# results they would move the UI's focus.
+# viewport 1280x720
+until 900 =Online Match
+frames 30
+click =Online Match
+until 300 =Create online match
+frames 10
+click =Create online match
+until 600 waiting for an opponent
+frames 10
+save online-host-lobby
+until 3600 Online Match
+until 3600 =Kick!
+frames 20
+save online-host-shoot
+repeat 60000 until Result recorded by the StarHermit server.
+  key KeyE 1
+  frames 3
+  key Enter 1
+  frames 6
+  key Enter 1
+  frames 40
+end
+expect =You win!
+frames 30
+save online-host-results
