@@ -409,7 +409,7 @@ function roomsResults(): void {
     next: forfeit ? (won ? () => T("Your opponent left — the match ended.") : () => T("You left the match.")) : () => T("Result recorded by the StarHermit server."),
   };
   app.appState = "results";
-  open("results", "btn-menu");
+  open("results", null); // no focus: a key still held from the match must not press Menu
   announce(app.results.headline(), true);
 }
 
