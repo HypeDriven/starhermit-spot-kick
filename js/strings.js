@@ -331,7 +331,23 @@
     ['Club', 'Club', 'Verein', 'Club', 'Clube', 'Club'],
     ['A reading keeper. Mix your placement.', 'Un arquero que lee el juego. Varía tus tiros.', 'Ein Torwart, der liest. Variiere deine Ziele.', 'Un gardien qui lit le jeu. Variez vos placements.', 'Um goleiro que lê o jogo. Varie seus chutes.', 'Un portiere che legge il gioco. Varia i tiri.'],
     ['Sharp', 'Hábil', 'Stark', 'Redoutable', 'Afiado', 'Bravo'],
-    ['Elite reactions. Curve and timing decide it.', 'Reflejos de élite. Deciden el efecto y el momento.', 'Elite-Reflexe. Effet und Timing entscheiden.', 'Réflexes d’élite. L’effet et le timing décident.', 'Reflexos de elite. Efeito e tempo decidem.', 'Riflessi d’élite. Decidono effetto e tempismo.']
+    ['Elite reactions. Curve and timing decide it.', 'Reflejos de élite. Deciden el efecto y el momento.', 'Elite-Reflexe. Effet und Timing entscheiden.', 'Réflexes d’élite. L’effet et le timing décident.', 'Reflexos de elite. Efeito e tempo decidem.', 'Riflessi d’élite. Decidono effetto e tempismo.'],
+    // ---- engine port: server-refereed online matches, the runtime's Options, zone targets
+    ['Private 1v1 shootout · refereed by the StarHermit server · reconnect supported', 'Duelo privado 1 contra 1 · arbitrado por el servidor de StarHermit · reconexión disponible', 'Privates 1-gegen-1-Elfmeterschießen · vom StarHermit-Server geleitet · Wiederverbinden möglich', 'Séance de tirs au but privée en 1 contre 1 · arbitrée par le serveur StarHermit · reconnexion possible', 'Disputa privada 1 contra 1 · arbitrada pelo servidor da StarHermit · reconexão disponível', 'Sfida privata 1 contro 1 · arbitrata dal server StarHermit · riconnessione disponibile'],
+    ['Connecting to the match…', 'Conectando con el partido…', 'Verbindung zum Spiel wird hergestellt …', 'Connexion au match…', 'Conectando à partida…', 'Connessione alla partita…'],
+    ['You left the match.', 'Abandonaste el partido.', 'Du hast das Spiel verlassen.', 'Vous avez quitté le match.', 'Você saiu da partida.', 'Hai lasciato la partita.'],
+    ['Result recorded by the StarHermit server.', 'Resultado registrado por el servidor de StarHermit.', 'Ergebnis vom StarHermit-Server festgehalten.', 'Résultat enregistré par le serveur StarHermit.', 'Resultado registrado pelo servidor da StarHermit.', 'Risultato registrato dal server StarHermit.'],
+    ['Progress restored from your StarHermit cloud save.', 'Progreso restaurado desde tu guardado en la nube de StarHermit.', 'Fortschritt aus deinem StarHermit-Cloudspeicher wiederhergestellt.', 'Progression restaurée depuis votre sauvegarde cloud StarHermit.', 'Progresso restaurado do seu salvamento na nuvem da StarHermit.', 'Progressi ripristinati dal salvataggio cloud StarHermit.'],
+    ['Results', 'Resultados', 'Ergebnisse', 'Résultats', 'Resultados', 'Risultati'],
+    ['Players: {n}/2', 'Jugadores: {n}/2', 'Spieler: {n}/2', 'Joueurs : {n}/2', 'Jogadores: {n}/2', 'Giocatori: {n}/2'],
+    ['Cancel', 'Cancelar', 'Abbrechen', 'Annuler', 'Cancelar', 'Annulla'],
+    ['Goal zone {zone}', 'Zona del arco {zone}', 'Torzone {zone}', 'Zone du but {zone}', 'Zona do gol {zone}', 'Zona della porta {zone}'],
+    ['Volumes, mute, graphics quality, language, larger text, high contrast, reduced motion and vibration are in the StarHermit Options.', 'El volumen, el silencio, la calidad gráfica, el idioma, el texto grande, el alto contraste, el movimiento reducido y la vibración están en las Opciones de StarHermit.', 'Lautstärke, Stummschaltung, Grafikqualität, Sprache, größere Schrift, hoher Kontrast, reduzierte Bewegung und Vibration findest du in den StarHermit-Optionen.', 'Volume, sourdine, qualité graphique, langue, texte agrandi, contraste élevé, animations réduites et vibrations se trouvent dans les Options StarHermit.', 'Volume, mudo, qualidade gráfica, idioma, texto maior, alto contraste, movimento reduzido e vibração ficam nas Opções da StarHermit.', 'Volume, silenzioso, qualità grafica, lingua, testo grande, contrasto elevato, movimento ridotto e vibrazione sono nelle Opzioni di StarHermit.'],
+    ['Open Options', 'Abrir Opciones', 'Optionen öffnen', 'Ouvrir les Options', 'Abrir Opções', 'Apri Opzioni'],
+    ['Key bindings', 'Asignación de teclas', 'Tastenbelegung', 'Raccourcis clavier', 'Atalhos de teclado', 'Assegnazione tasti'],
+    ['Graphics', 'Gráficos', 'Grafik', 'Graphismes', 'Gráficos', 'Grafica'],
+    ['High contrast (StarHermit Options) shows the Monochrome theme.', 'El alto contraste (Opciones de StarHermit) muestra el tema Monocromo.', 'Hoher Kontrast (StarHermit-Optionen) zeigt das Monochrom-Design.', 'Le contraste élevé (Options StarHermit) affiche le thème Monochrome.', 'O alto contraste (Opções da StarHermit) mostra o tema Monocromático.', 'Il contrasto elevato (Opzioni di StarHermit) mostra il tema Monocromatico.'],
+    ['a player left the match', 'un jugador abandonó el partido', 'ein Spieler hat das Spiel verlassen', 'un joueur a quitté le match', 'um jogador saiu da partida', 'un giocatore ha lasciato la partita']
   ];
 
   var COLS = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
@@ -350,6 +366,7 @@
     'Penalty shootout duel under the floodlights': 'Duelo de penaltis bajo los focos',
     'Warming up the floodlights…': 'Encendiendo los focos…',
     'Goal zones': 'Zonas de la portería',
+    'Goal zone {zone}': 'Zona de la portería {zone}',
     'Aim: tap a goal zone (on the goal or below), choose curve, confirm.': 'Apunta: toca una zona de la portería (en la portería o debajo), elige el efecto y confirma.',
     'Keeper controls': 'Controles del portero',
     'Kick!': '¡Chuta!',

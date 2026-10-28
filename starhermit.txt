@@ -1,21 +1,62 @@
 name=Spot Kick
 description=Alternate between taking penalties and defending the goal, choosing shot placement and timing your saves.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
-server=score-script.js
+# The one server script: it referees every online match (a room-bound session
+# that decides each kick and the result) and range-checks the goals a finished
+# solo match posts to the leaderboard (what score-script.js did). Built from
+# tools/server-head.js, js/rules.js and tools/server-body.js (npm run server).
+server=server.js
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.20.2
+engine.minor=20
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard actions (players rebind keys and pads in the runtime's Options).
+# The goal is also played with the pointer or a finger: a press on a goal zone
+# (or its button in the six-zone grid) selects it; the curve / timing buttons
+# and Kick! / Dive! confirm.
+engine.group.left=Aim
 control.left=ArrowLeft | Zone cursor left
 control.right=ArrowRight | Zone cursor right
 control.high=ArrowUp | Zone cursor high
 control.low=ArrowDown | Zone cursor low
-control.confirm=Enter+Space | Select zone / confirm
+control.confirm=Enter+Space+NumpadEnter | Select zone / confirm
+control.curve_left=KeyQ | Curve left
+control.curve_right=KeyE | Curve right
+control.early=Digit1+Numpad1 | Dive early
+control.on_time=Digit2+Numpad2 | Dive on time
+control.late=Digit3+Numpad3 | Dive late
+engine.group.pause=Match
 control.pause=Escape | Pause / close
 control.help=KeyH | Help
-control.curveLeft=KeyQ | Curve left
-control.curveRight=KeyE | Curve right
-control.early=Digit1+Numpad1 | Dive early
-control.onTime=Digit2+Numpad2 | Dive on time
-control.late=Digit3+Numpad3 | Dive late
 control.undo=KeyU | Undo (practice)
 control.camera=KeyC | Reset camera
 control.skip=KeyS | Skip animation
+
+# Gamepad defaults (the browser build read the D-pad, South, East and Start):
+# the D-pad or left stick moves the zone cursor, South selects / confirms,
+# the shoulders curve, the triggers dive early / late and West on time, Start
+# pauses, East undoes in Practice, North skips, the right stick resets the view.
+engine.gamepad.left=DpadLeft+LeftStickLeft
+engine.gamepad.right=DpadRight+LeftStickRight
+engine.gamepad.high=DpadUp+LeftStickUp
+engine.gamepad.low=DpadDown+LeftStickDown
+engine.gamepad.confirm=South
+engine.gamepad.curve_left=LeftShoulder
+engine.gamepad.curve_right=RightShoulder
+engine.gamepad.early=LeftTrigger
+engine.gamepad.on_time=West
+engine.gamepad.late=RightTrigger
+engine.gamepad.pause=Start
+engine.gamepad.undo=East
+engine.gamepad.skip=North
+engine.gamepad.camera=RightStickPress
