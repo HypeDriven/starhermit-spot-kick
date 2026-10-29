@@ -12,8 +12,7 @@
 // (native/quality.ts: gfx.js's presets and budgets).
 //
 // From three.js r160 (physically based lights): colours as written, the
-// punctual and hemisphere lights' intensities ÷ π (the engine takes three's
-// legacy units). render.js's `new RoomEnvironment(renderer)` (the r160 call)
+// light intensities, shadow box and normalBias as the page (minor 29). render.js's `new RoomEnvironment(renderer)` (the r160 call)
 // is kept exactly, carried by every lit material as its own envMap at its
 // envMapIntensity (as r160 applied scene.environment). The old composer
 // (RenderPass in half floats → UnrealBloom 0.55 / 0.45 / 0.92 → OutputPass
@@ -30,7 +29,7 @@ import {
   CylinderGeometry, DirectionalLight, DoubleSide, EdgesGeometry, ExtrudeGeometry, Float32BufferAttribute, Fog, Group, HemisphereLight,
   InstancedMesh, LineBasicMaterial, LineSegments, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial,
   MeshStandardMaterial, PMREMGenerator, PerspectiveCamera, PlaneGeometry, Points, PointsMaterial, Raycaster, RepeatWrapping, RingGeometry,
-  RoomEnvironment, SRGBColorSpace, ShaderMaterial, Shape, SphereGeometry, Sprite, SpriteMaterial, Vector2, Vector3, Vector4, pointerToNdc,
+  OrthographicCamera, RoomEnvironment, SRGBColorSpace, ShaderMaterial, Shape, SphereGeometry, Sprite, SpriteMaterial, Vector2, Vector3, Vector4, pointerToNdc,
   renderer, scene, type Material, type Object3D, type Texture,
 } from "starhermit:scene";
 import { OffscreenCanvas, type OffscreenCanvasRenderingContext2D } from "starhermit:canvas";
@@ -45,6 +44,7 @@ export const FRAME = {
   CAM_KEEP: { x: 0, y: 2.4, z: -9.5, lx: 0, ly: 1.3, lz: 11 },
   CAM_TRANS_MS: 900,
   PLAY_CENTER: { x: 0, z: 5.5 },
+  PLAY_HALF: 8.5,
 };
 export interface Rect { x: number; y: number; width: number; height: number }
 const COLS = ["left", "center", "right"] as const;
@@ -187,18 +187,21 @@ export function build(t: Theme): void {
   scene.background = tex.sky;
   scene.fog = new Fog(horizon, 40, 140);
 
-  // lighting: one dominant key (floodlight bank) + hemisphere fill + accent rim (r160 intensities ÷ π)
-  keyLight = new DirectionalLight(0xfff4e2, 2.0 / Math.PI);
+  // lighting: one dominant key (floodlight bank) + hemisphere fill + accent rim (r160 intensities as written)
+  keyLight = new DirectionalLight(0xfff4e2, 2.0);
   keyLight.target.position.set(FRAME.PLAY_CENTER.x, 0, FRAME.PLAY_CENTER.z);
   keyLight.position.set(7, 15, 13);
   keyLight.shadow.bias = -0.0004;
-  keyLight.shadow.normalBias = 1; // three's 0.02 world units; the engine's normal bias is in texels
+  const sc = keyLight.shadow.camera as OrthographicCamera;
+  sc.left = -FRAME.PLAY_HALF; sc.right = FRAME.PLAY_HALF; sc.top = FRAME.PLAY_HALF; sc.bottom = -FRAME.PLAY_HALF;
+  sc.near = 4; sc.far = 40;
+  sc.updateProjectionMatrix();
+  keyLight.shadow.normalBias = 0.02;
   keyLight.shadow.radius = 3;
-  keyLight.shadow.distance = 40;
-  hemi = new HemisphereLight(0x9ab8ff, 0x0c1410, 0.55 / Math.PI);
-  const rim = new DirectionalLight(t.accent, 0.7 / Math.PI);
+  hemi = new HemisphereLight(0x9ab8ff, 0x0c1410, 0.55);
+  const rim = new DirectionalLight(t.accent, 0.7);
   rim.position.set(-8, 6, -6);
-  const back = new DirectionalLight(0xdfe6ff, 0.5 / Math.PI); // opposite floodlight bank
+  const back = new DirectionalLight(0xdfe6ff, 0.5); // opposite floodlight bank
   back.position.set(-6, 12, -10);
   root.add(keyLight, keyLight.target, hemi, rim, back);
 
@@ -600,7 +603,7 @@ function applyQuality(): void {
   const env = look.reflections ? environment() : null;
   scene.environment = null;
   for (const m of litMats) if (m instanceof MeshStandardMaterial) m.envMap = env;
-  if (hemi) hemi.intensity = (env ? 0.35 : 0.55) / Math.PI;
+  if (hemi) hemi.intensity = env ? 0.35 : 0.55;
 }
 
 /** The runtime's quality tier applied live: the stadium rebuilds when its budget changes, else the switches. */
@@ -610,8 +613,8 @@ export function applyLook(next: Look): void {
   look = next;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  // UnrealBloomPass(0.55, 0.45, 0.92) on the linear half floats: only lamp banks and bright highlights bloom.
-  renderer.bloom = next.bloom ? { strength: 0.55, radius: 0.45, threshold: 0.92, resolution: next.budget.bloomRes } : null;
+  // UnrealBloomPass(0.55, 0.45, 0.92) of r160, strength squared for r185's bloom, on the linear half floats: only lamp banks and bright highlights bloom.
+  renderer.bloom = next.bloom ? { strength: 0.55 * 0.55, radius: 0.45, threshold: 0.92, resolution: next.budget.bloomRes } : null;
   // GradeShader after OutputPass (display space): a 0.22 S-curve, saturation 1.1, cool shadows / warm floodlit
   // highlights by a smoothstep of luma from 0.25 to 0.85, a 0.26 vignette from 0.38 to 0.85.
   renderer.grade = next.grade ? {
