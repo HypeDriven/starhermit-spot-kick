@@ -613,12 +613,13 @@ export function applyLook(next: Look): void {
   look = next;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
-  // UnrealBloomPass(0.55, 0.45, 0.92) of r160, strength squared for r185's bloom, on the linear half floats: only lamp banks and bright highlights bloom.
-  renderer.bloom = next.bloom ? { strength: 0.55 * 0.55, radius: 0.45, threshold: 0.92, resolution: next.budget.bloomRes } : null;
+  // UnrealBloomPass(0.55, 0.45, 0.92) of r160 (bloom.model "r160", the page's strength), on the linear half floats: only lamp banks and bright highlights bloom.
+  renderer.bloom = next.bloom ? { model: "r160", strength: 0.55, radius: 0.45, threshold: 0.92, resolution: next.budget.bloomRes } : null;
   // GradeShader after OutputPass (display space): a 0.22 S-curve, saturation 1.1, cool shadows / warm floodlit
-  // highlights by a smoothstep of luma from 0.25 to 0.85, a 0.26 vignette from 0.38 to 0.85.
+  // highlights by a smoothstep of luma from 0.25 to 0.85, s × 0.975 + 0.018 (levels), a 0.26 vignette from 0.38 to 0.85.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.11, saturation: 1.1, split: [0.25, 0.85], shadows: [0.95, 0.98, 1.06], highlights: [1.04, 1.01, 0.96],
+    space: "display", contrastCurve: "s", contrast: 0.22, saturation: 1.1, split: [0.25, 0.85], shadows: [0.95, 0.98, 1.06], highlights: [1.04, 1.01, 0.96],
+    levels: [0.975, 0.018],
     vignette: { amount: 0.26, inner: 0.38, outer: 0.85 },
   } : null;
   renderer.antialias = next.antialias;
