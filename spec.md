@@ -3,8 +3,8 @@
 Spot Kick is an alternating penalty-shootout duel under the floodlights: the
 players take turns shooting and keeping goal, choosing a goal zone, a curve and
 a dive timing across a five-kick set with sudden death on ties. It is a
-StarHermit engine **script game** (TypeScript on the host API, engine 1.28.0,
-`engine.minor=30`), played natively by the StarHermit client and in browsers by
+StarHermit engine **script game** (TypeScript on the host API, engine 1.29.0,
+`engine.minor=31`), played natively by the StarHermit client and in browsers by
 the engine's web runtime from one package.
 
 ## Rules (js/rules.js, unchanged from the browser build)
