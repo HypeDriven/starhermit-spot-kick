@@ -22,13 +22,13 @@
 // Online matches are server-refereed: js/online.js over the platform's rooms,
 // server.js decides every kick (see its header); this client only shows the
 // snapshots it sends.
-import { clipboard, frame, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
+import { afterRender, clipboard, createTimers, frame, levelSettings, onFixedUpdate, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
 import { onAction, onPointerButton, onPointerMove, onTouch, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn, type Room } from "starhermit:platform";
 import { Content, Progress, Rules, SessionMod, type Achievement, type Breakdown, type KickEvent, type Session, type Stage, type State, type Theme, type Zone } from "./classic.ts";
 import * as audio from "./audio.ts";
-import { N, S, T } from "./i18n.ts";
+import { N, T } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import { lookFor } from "./quality.ts";
 import * as render from "./render.ts";
@@ -77,7 +77,6 @@ export const app = {
   notice: null as { title: Thunk; body: Thunk } | null,
   helpReturn: null as Overlay,
   captions: [] as { text: string; until: number }[],
-  toasts: [] as { text: Thunk; until: number }[],
   // online
   lobby: null as LobbyClient | null,
   online: null as MatchClient | null,
@@ -92,18 +91,9 @@ export const now = (): number => clockMs / 1000;
 export const fresh = (): boolean => frame().frame !== app.openedFrame;
 
 // ------------------------------------------------------------------ the fixed-step scheduler (setTimeout's place)
-let timers: { at: number; fn: () => void; id: number }[] = [];
-let timerId = 0;
-function after(ms: number, fn: () => void): number { const id = ++timerId; timers.push({ at: clockMs + ms, fn, id }); return id; }
-function cancel(id: number): void { timers = timers.filter((t) => t.id !== id); }
-function runTimers(): void {
-  for (;;) {
-    const due = timers.filter((t) => t.at <= clockMs);
-    if (!due.length) return;
-    timers = timers.filter((t) => t.at > clockMs);
-    for (const t of due.sort((a, b) => a.at - b.at || a.id - b.id)) t.fn();
-  }
-}
+const timers = createTimers();
+const after = (ms: number, fn: () => void): number => timers.after(ms / 1000, fn);
+const cancel = (id: number): void => { timers.cancel(id); };
 
 // ------------------------------------------------------------------ helpers
 const spoken: string[] = [];
@@ -123,9 +113,7 @@ function flushAnnouncements(): void {
 /** ui.alertUser: an assertive announcement and a toast. */
 export function alertUser(text: string): void { announce(text, true); }
 export function toast(text: Thunk): void {
-  app.toasts.push({ text, until: now() + 3.2 });
-  if (app.toasts.length > 3) app.toasts.shift();
-  announce(text());
+  ui.toast!(text(), { duration: 3.2, style: ["toast", "toast-text"], dismissible: false });
 }
 /** audio.js event with its caption (Settings › Captions). */
 export function sound(ev: audio.Sfx): void {
@@ -134,9 +122,8 @@ export function sound(ev: audio.Sfx): void {
   if (c && platform.options.captions) { app.captions = [{ text: c, until: now() + 2.4 }]; }
 }
 function haptic(ms: number): void { try { vibrate(ms); } catch { /* none */ } }
-const pending: (() => void)[] = [];
-/** A widget's press, run once the frame's UI is built (state changes mid-build would break later widgets). */
-export function later(fn: () => void): void { pending.push(fn); }
+/** A widget's press, run once the frame's UI is built (state changes mid-build would break later widgets), before the scene is drawn. */
+export const later = (fn: () => void): void => { afterRender(fn); };
 const ml = (c: Config | null): string => (c && c.modeLabel ? c.modeLabel() : "");
 const WORD: Record<string, string> = { left: N("left"), center: N("center"), right: N("right"), high: N("high"), low: N("low"), none: N("none"), early: N("early"), on: N("on time"), late: N("late") };
 const GOAL: Record<string, string> = { win: N("win"), "win-by-2": N("win by 2"), "clean-sheet": N("clean sheet") };
@@ -628,7 +615,7 @@ export function confirmSelection(): void {
 }
 
 // ------------------------------------------------------------------ resolution → results
-let postKick = 0;
+let postKick = 0, postKickFn: () => void = () => {};
 function animateResolution(ev: KickEvent, next: () => void): void {
   app.resolving = true;
   app.appState = "resolving";
@@ -644,13 +631,14 @@ function animateResolution(ev: KickEvent, next: () => void): void {
     sound(ev.outcome === "goal" ? "goal" : ev.outcome === "saved" ? "save" : "offtarget");
     if (ev.outcome === "goal") haptic(80);
     app.resolving = true; // the pause after the kick: input stays locked
-    postKick = after(preferences().reducedMotion ? 250 : 900, () => {
+    postKickFn = () => {
       app.resolving = false;
       render.resetPositions();
       if (app.mode === "hosted") { refreshHostedHud(); return; }
       if (app.match && app.match.state.over) onMatchOver();
       else next();
-    });
+    };
+    postKick = after(preferences().reducedMotion ? 250 : 900, postKickFn);
   });
 }
 export let lastOutcome: { text: string; until: number; kind: string } | null = null;
@@ -665,8 +653,7 @@ function describeKick(ev: KickEvent): string {
 export function skipAnim(): void {
   render.skip();
   if (postKick && app.resolving && !render.animating()) {
-    const t = timers.find((x) => x.id === postKick);
-    if (t) { cancel(postKick); postKick = 0; t.fn(); }
+    if (timers.has(postKick)) { cancel(postKick); postKick = 0; postKickFn(); }
   }
 }
 export function doUndo(): void {
@@ -760,7 +747,7 @@ function onMatchOver(): void {
   const post = platform.signedIn() && !hot && (app.mode === "play" || app.mode === "journey" || app.mode === "daily");
   if (post) {
     let lb: platform.Posted | null = null;
-    r.lb = () => (!lb ? S("lbPosting") : !lb.posted ? S("lbFailed") : lb.rank ? S("lbRank", { rank: lb.rank }) : S("lbPosted"));
+    r.lb = () => (!lb ? T("starhermit.leaderboardPosting") : !lb.posted ? T("starhermit.leaderboardNotPosted") : lb.rank ? T("starhermit.leaderboardRank", { rank: lb.rank }) : T("starhermit.leaderboardPosted"));
     void platform.postGoals(st.scoreA).then((res) => {
       lb = res;
       if (board) void platform.topEntries(10).then((b) => { r.board = b; });
@@ -832,7 +819,7 @@ export function signIn(): void { void requestSignIn().catch(() => undefined); }
 export function invite(): void {
   const link = platform.inviteLink();
   if (!link) return;
-  try { clipboard.writeText(link); toast(() => S("copied")); } catch { toast(() => `${S("copyFailed")}: ${link}`); }
+  try { clipboard.writeText(link); toast(() => T("starhermit.inviteCopied")); } catch { toast(() => `${T("starhermit.inviteFailed")}: ${link}`); }
 }
 
 // ------------------------------------------------------------------ HUD text (bootstrap.js refreshHud / refreshHudHosted)
@@ -970,7 +957,7 @@ onFixedUpdate(() => {
   clockMs += 1000 / 60;
   render.step(1 / 60);
   decisionTick();
-  runTimers();
+  timers.advance(1 / 60);
   app.online?.update();
 });
 
@@ -978,10 +965,9 @@ onFixedUpdate(() => {
 let lookKey = "";
 function applyLook(): void {
   const f = frame();
-  const k = `${f.quality}:${f.levelIndex}`;
-  if (k === lookKey) return;
-  lookKey = k;
-  render.applyLook(lookFor(f.quality, f.levelIndex));
+  if (f.level === lookKey) return;
+  lookKey = f.level;
+  render.applyLook(lookFor(levelSettings(f.level)));
 }
 let themeKey = "";
 function applyTheme(): void {
@@ -1025,10 +1011,10 @@ onSessionEnded((reason) => {
   const wasOnline = !!app.online || !!app.lobby;
   if (wasOnline) leaveToTitle();
   if (wasOnline || terms || reason === "expired") {
-    app.notice = { title: () => (terms ? S("termsTitle") : S("expiredTitle")), body: () => (terms ? S("termsBody") : S("expiredBody")) };
+    app.notice = { title: () => (terms ? T("acct.termsTitle") : T("acct.expiredTitle")), body: () => (terms ? T("acct.termsBody") : T("acct.expiredBody")) };
     openOverlay("notice", "btn-notice-local");
     announce(app.notice.title(), true);
-  } else toast(() => S("signedOut"));
+  } else toast(() => T("starhermit.signedOut"));
 });
 onSuspend(() => {
   hidden = true;
@@ -1048,17 +1034,17 @@ onUpdate((dt) => {
   const st = currentState();
   audio.setTension(!!st && st.suddenDeath && app.screen === "play");
   const t = now();
-  app.toasts = app.toasts.filter((x) => x.until >= t);
   app.captions = app.captions.filter((x) => x.until >= t);
   if (lastOutcome && lastOutcome.until < t) lastOutcome = null;
 });
 onRender(() => {
   const wasPlaying = myTurn() && app.screen === "play" && !app.overlay;
   drawScreens();
-  for (const fn of pending.splice(0)) fn();
-  pointerInput(wasPlaying);
-  const f = frame();
-  render.update(frameDt, f.width, f.height, view, ui.preferences().scale);
-  flushAnnouncements();
+  afterRender(() => { // after this frame's presses (added earlier), before the scene is synced and drawn
+    pointerInput(wasPlaying);
+    const f = frame();
+    render.update(frameDt, f.width, f.height, view, ui.preferences().scale);
+    flushAnnouncements();
+  });
 });
 export { primaryPointer };

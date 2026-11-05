@@ -20,7 +20,7 @@
 // - rooms and the bound session's game socket for js/online.js (`adapter`).
 import type { JsonValue } from "starhermit:engine";
 import {
-  connectGame, inviteLink as fetchInviteLink, leaderboards, onPlayerChange, player, rooms, serverNow, serverTime, sessions,
+  connectGame, inviteLink as fetchInviteLink, leaderboards, onPlayerChange, player, rooms, serverNow, serverTime,
   type GameSocket, type Leaderboard, type Room, type RoomSocket,
 } from "starhermit:platform";
 import { saves, settings as store } from "starhermit:storage";
@@ -189,41 +189,8 @@ export async function topEntries(n: number): Promise<BoardRow[] | null> {
 export interface Posted { posted: boolean; rank: number | null }
 /** Signed in only: post a finished match's goals through server.js; { posted, rank }. Never rejects. */
 export async function postGoals(goals: number): Promise<Posted> {
-  const me = player();
-  if (!me) return { posted: false, rank: null };
-  const score = Math.max(0, Math.round(goals));
-  let accepted: string[] = [];
-  try {
-    const sessionId = await sessions.practice();
-    accepted = await new Promise<string[]>((resolve) => {
-      const socket = connectGame(sessionId);
-      let done = false;
-      const finish = (list: string[]): void => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        socket.close();
-        resolve(list);
-      };
-      const timer = setTimeout(() => finish([]), 15000);
-      socket.on("open", () => { socket.sendCommand({ type: "result", scores: { goals: score } }); });
-      socket.on("game", (d) => {
-        const m = d as { type?: string; accepted?: string[] } | null;
-        if (m && m.type === "result-ack") finish(Array.isArray(m.accepted) ? m.accepted : []);
-      });
-      socket.on("error", () => finish([]));
-      socket.on("stopped", () => finish([]));
-      socket.on("abandoned", () => finish([]));
-    });
-  } catch { return { posted: false, rank: null }; }
-  if (!accepted.includes("goals")) return { posted: false, rank: null };
-  try {
-    const b = await goalsBoard();
-    if (!b) return { posted: true, rank: null };
-    const r = await leaderboards.entries(b.id, { pageSize: 100 });
-    const mine = r.items.find((e) => e.userId === me.userId);
-    return { posted: true, rank: mine ? mine.rank : null };
-  } catch { return { posted: true, rank: null }; }
+  const r = await leaderboards.submitScore("goals", Math.max(0, Math.round(goals)));
+  return { posted: r.accepted, rank: r.rank };
 }
 
 // --- rooms and the game socket (js/online.js's platform) ------------------------------------

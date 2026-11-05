@@ -5,11 +5,10 @@
 // lessons, the 40 Journey stages, the challenges, the Daily, the practice
 // keepers), the session (js/session.js: validated commands with ids, the AI
 // turns, undo, the replay envelope, the checksummed save encoding), the save
-// model and the game's options (js/progress.js), the string tables
-// (js/strings.js) and the account strings (js/sh-strings.js).
+// model and the game's options (js/progress.js).
 import { loadClassic } from "starhermit:script";
 
-for (const f of ["js/rules.js", "js/content.js", "js/session.js", "js/progress.js", "js/strings.js", "js/sh-strings.js"]) loadClassic(f);
+for (const f of ["js/rules.js", "js/content.js", "js/session.js", "js/progress.js"]) loadClassic(f);
 
 export interface Zone { dir: string; height: string }
 export interface Shot { dir: string; height: string; curve: string }
@@ -75,18 +74,10 @@ interface ProgressApi {
   readForeign(text: string | null): Save | null; pickOption(key: string, v: unknown): unknown; unlock(save: Save, key: string, now: number): Achievement | null;
   readLegacySettings(kv: Record<string, unknown>): { options: Partial<Options>; tutorialDone: boolean };
 }
-export interface AccountStrings {
-  signIn: string; invite: string; copied: string; copyFailed: string; signedOut: string; expiredTitle: string; expiredBody: string;
-  relaunch: string; playLocal: string; termsTitle: string; termsBody: string; lbPosting: string; lbRank: string; lbPosted: string; lbFailed: string;
-}
-
 const G = globalThis as unknown as {
   SpotKickRules: RulesApi; SpotKickContent: ContentApi; SpotKickSession: SessionApi; SpotKickProgress: ProgressApi;
-  SK_STRINGS: Record<string, Record<string, string>>; SpotKickShStrings: { STRINGS: Record<string, AccountStrings> };
 };
 export const Rules = G.SpotKickRules;
 export const Content = G.SpotKickContent;
 export const SessionMod = G.SpotKickSession;
 export const Progress = G.SpotKickProgress;
-export const Strings = G.SK_STRINGS;
-export const ShStrings = G.SpotKickShStrings;

@@ -614,7 +614,7 @@ export function applyLook(next: Look): void {
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   // UnrealBloomPass(0.55, 0.45, 0.92) of r160 (bloom.model "r160", the page's strength), on the linear half floats: only lamp banks and bright highlights bloom.
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.55, radius: 0.45, threshold: 0.92, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom !== null ? { model: "r160", strength: 0.55, radius: 0.45, threshold: 0.92, resolution: next.bloom } : null;
   // GradeShader after OutputPass (display space): a 0.22 S-curve, saturation 1.1, cool shadows / warm floodlit
   // highlights by a smoothstep of luma from 0.25 to 0.85, s × 0.975 + 0.018 (levels), a 0.26 vignette from 0.38 to 0.85.
   renderer.grade = next.grade ? {

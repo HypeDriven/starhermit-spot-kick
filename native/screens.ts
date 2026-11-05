@@ -18,7 +18,7 @@ import { bindings, requestRebind } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
 import { Content, Progress, type Stage, type Zone } from "./classic.ts";
-import { S, T } from "./i18n.ts";
+import { T } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import * as render from "./render.ts";
 import {
@@ -34,9 +34,8 @@ import { token } from "./style.ts";
 interface Layout { lw: number; lh: number; sc: number; wide: boolean; land: boolean; fw: number; fh: number }
 function layoutNow(): Layout {
   const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
+  const v = ui.viewport!();
+  const sc = v.scale, lw = Math.max(1, v.width), lh = Math.max(1, v.height);
   const land = lw > lh && lh <= 500;
   return { lw, lh, sc, wide: lw >= 560 && !land, land, fw: f.width / sc, fh: f.height / sc };
 }
@@ -78,18 +77,9 @@ function button(b: Btn): void {
 }
 /** Buttons at their own widths in rows that wrap at `width` (flex-wrap). */
 function flow(label: string, list: Btn[], width: number, gap = 8, justify: "start" | "center" = "center"): void {
-  const rows: Btn[][] = [[]];
-  let used = 0;
-  const bw = (b: Btn): number => Math.min(width, b.width ?? buttonWidth(b.text, b.style ?? "btn"));
-  for (const b of list) {
-    const bwid = bw(b);
-    if (rows[rows.length - 1]!.length && used + gap + bwid > width) { rows.push([]); used = 0; }
-    used += (rows[rows.length - 1]!.length ? gap : 0) + bwid;
-    rows[rows.length - 1]!.push(b);
-  }
-  ui.column(label, () => {
-    rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => { for (const b of row) button({ ...b, width: bw(b) }); }, { spacing: gap, width, justify, align: "center" }));
-  }, { spacing: gap, width });
+  ui.row(label, () => {
+    for (const b of list) button(b.width != null ? { ...b, width: Math.min(width, b.width) } : buttonWidth(b.text, b.style ?? "btn") > width ? { ...b, width } : b);
+  }, { wrap: true, width, gap, justify, align: "center" });
 }
 function toWindow(x: number, y: number, wd: number, h: number): ui.Rect {
   const sc = ui.preferences().scale, sa = frame().safeArea;
@@ -106,7 +96,6 @@ export function drawScreens(): void {
   else if (app.screen === "setup") page(T("Setup"), "screen-bg", L, (wd) => setupPage(wd, L));
   else if (app.screen === "results") page(T("Results"), "screen-bg", L, (wd) => resultsPage(wd, L));
   if (app.overlay) overlay(L);
-  toasts(L);
   if (app.focusNext) {
     const age = f.frame - app.openedFrame;
     if (age >= 1) ui.setFocus(app.focusNext);
@@ -160,8 +149,8 @@ function titlePage(wd: number, L: Layout): void {
   if (platform.signedIn()) list.push({ id: "btn-online", text: T("Online Match"), act: setupOnline });
   list.push({ id: "btn-help", text: T("Help"), act: showHelp, quiet: true });
   list.push({ id: "btn-settings", text: T("Settings"), act: showSettings });
-  if (!platform.signedIn()) list.push({ id: "btn-signin", text: S("signIn"), act: signIn });
-  else if (platform.inviteLink()) list.push({ id: "btn-invite", text: S("invite"), act: invite });
+  if (!platform.signedIn()) list.push({ id: "btn-signin", text: T("starhermit.signIn"), act: signIn });
+  else if (platform.inviteLink()) list.push({ id: "btn-invite", text: T("starhermit.invite"), act: invite });
   if (L.land) {
     // short landscape: a compact heading and a 3-column grid so it fits without scrolling
     const gw = Math.min(wd, 640), cols = 3, gap = 8, cw = (gw - (cols - 1) * gap) / cols;
@@ -580,18 +569,7 @@ function noticePanel(wd: number): void {
   para(n.title(), bw, "h2", "notice-heading");
   para(n.body(), bw, "center", "notice-body");
   const list: Btn[] = [];
-  if (!platform.signedIn()) list.push({ id: "btn-notice-signin", text: S("signIn"), act: () => { closeOverlay(); signIn(); } });
-  list.push({ id: "btn-notice-local", text: S("playLocal"), act: closeOverlay });
+  if (!platform.signedIn()) list.push({ id: "btn-notice-signin", text: T("starhermit.signIn"), act: () => { closeOverlay(); signIn(); } });
+  list.push({ id: "btn-notice-local", text: T("acct.playLocal"), act: closeOverlay });
   flow("notice-row", list, bw);
-}
-
-// ------------------------------------------------------------------ toasts (.sh-toast)
-function toasts(L: Layout): void {
-  if (!app.toasts.length) return;
-  const wd = Math.min(L.lw - 32, 520);
-  ui.place("toast-stack", { anchor: "bottom", y: 16 }, () => {
-    ui.column("toast-col", () => {
-      app.toasts.forEach((t, i) => ui.column(`toast-${i}`, () => para(t.text(), wd - 34, "toast-text", `toast-${i}-text`), { style: "toast" }));
-    }, { spacing: 6, align: "center" });
-  });
 }

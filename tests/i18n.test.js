@@ -1,30 +1,25 @@
 'use strict';
 // Every string the engine client shows is translated in the nine locales:
 // the English keys native/*.ts passes to T() / N() and the content and
-// achievement names it shows (js/strings.js: es-419, de-DE, fr-FR, pt-BR and
+// achievement names it shows (assets/strings.json: es-419, de-DE, fr-FR, pt-BR and
 // it-IT carry every key; en-GB, es-ES and fr-CA only their differences), and
-// the account strings in js/sh-strings.js.
+// the game's own account lines (acct.*; the rest are the engine's starhermit.*).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 const content = require('../js/content');
 const progress = require('../js/progress');
-const sh = require('../js/sh-strings');
 
 const ROOT = path.join(__dirname, '..');
-const ctx = { self: {} };
-vm.createContext(ctx);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', 'strings.js'), 'utf8'), ctx);
-const T = ctx.self.SK_STRINGS;
+const T = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets', 'strings.json'), 'utf8'));
 const FULL = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
 
 function clientKeys() {
   const keys = new Set();
   for (const f of fs.readdirSync(path.join(ROOT, 'native')).filter((n) => n.endsWith('.ts'))) {
     const src = fs.readFileSync(path.join(ROOT, 'native', f), 'utf8');
-    for (const m of src.matchAll(/\b[TN]\(\s*"((?:[^"\\]|\\.)*)"/g)) keys.add(JSON.parse(`"${m[1]}"`));
+    for (const m of src.matchAll(/\b[TN]\(\s*"((?:[^"\\]|\\.)*)"/g)) if (!m[1].startsWith('starhermit.')) keys.add(JSON.parse(`"${m[1]}"`));
     // English keys in tables the screens translate (zone names, terminal reasons, setup titles, captions)
     for (const m of src.matchAll(/name: "((?:[^"\\]|\\.)*)" \}/g)) keys.add(JSON.parse(`"${m[1]}"`));
   }
@@ -50,6 +45,7 @@ test('every client string is translated in the five full tables', () => {
 test('placeholders survive translation', () => {
   for (const loc of [...FULL, 'en-GB', 'es-ES', 'fr-CA']) {
     for (const [k, v] of Object.entries(T[loc] || {})) {
+      if (k.startsWith('acct.')) continue;
       const want = (k.match(/\{\w+\}/g) || []).sort().join();
       const got = (String(v).match(/\{\w+\}/g) || []).sort().join();
       assert.equal(got, want, `${loc}: ${k}`);
@@ -58,8 +54,9 @@ test('placeholders survive translation', () => {
 });
 
 test('the account strings exist in every locale', () => {
-  const keys = Object.keys(sh.STRINGS['en-US']);
+  const keys = Object.keys(T['en-US']).filter((k) => k.startsWith('acct.'));
+  assert.ok(keys.length >= 5);
   for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) {
-    for (const k of keys) assert.ok(sh.STRINGS[loc] && sh.STRINGS[loc][k], `${loc}.${k}`);
+    for (const k of keys) assert.ok(T[loc] && T[loc][k], `${loc}.${k}`);
   }
 });

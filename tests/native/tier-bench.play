@@ -1,0 +1,22 @@
+# Tier bench: Practice against the Sharp keeper, the first kick and the keeper's turn under the floodlights.
+until 600 =Play
+frames 30
+click =Practice
+until 300 =Club
+frames 10
+click =Sharp
+frames 5
+click =Start Match
+until 1500 =Kick!
+frames 120
+measure start
+frames 150
+key ArrowRight 1
+frames 3
+key Enter 1
+frames 5
+key Enter 1
+frames 5
+until 400 =Dive!
+frames 400
+measure stop
