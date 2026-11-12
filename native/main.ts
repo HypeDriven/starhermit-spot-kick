@@ -1,3 +1,4 @@
+import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Spot Kick on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
 // the engine's web runtime. The rules (js/rules.js), content (js/content.js),
@@ -1037,7 +1038,7 @@ onUpdate((dt) => {
   app.captions = app.captions.filter((x) => x.until >= t);
   if (lastOutcome && lastOutcome.until < t) lastOutcome = null;
 });
-onRender(() => {
+onRender(__l10nRender(() => {
   const wasPlaying = myTurn() && app.screen === "play" && !app.overlay;
   drawScreens();
   afterRender(() => { // after this frame's presses (added earlier), before the scene is synced and drawn
@@ -1046,5 +1047,9 @@ onRender(() => {
     render.update(frameDt, f.width, f.height, view, ui.preferences().scale);
     flushAnnouncements();
   });
-});
+}));
 export { primaryPointer };
+
+// localization-runtime:menu
+import { installLanguageMenu as __installLanguageMenu } from "./l10n/menu.ts";
+__installLanguageMenu(false);

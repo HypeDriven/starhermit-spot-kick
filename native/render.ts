@@ -1,3 +1,5 @@
+// localization-runtime:attached
+import { localizedCanvasFont as __l10nCanvasFont } from "./l10n/font.ts";
 // The night stadium on starhermit:scene, as the browser build's js/render.js
 // drew it with three.js r160: the goal (clear-coated posts and bar, back
 // stanchions, the fine or coarse net), the six pick zones and the selected
@@ -451,7 +453,7 @@ function buildStands(t: Theme): void {
   // perimeter LED boards behind the goal (dim, so the goalmouth stays clear)
   tex.boards = track(canvasTex(1024, 32, (g, w, h) => {
     g.fillStyle = "#0a1122"; g.fillRect(0, 0, w, h);
-    g.font = "bold 22px sans-serif"; g.textBaseline = "middle";
+    g.font = __l10nCanvasFont("bold 22px sans-serif"); g.textBaseline = "middle";
     for (let i = 0; i < 6; i++) {
       g.fillStyle = i % 2 ? hex(t.accent) : "#cfd8ea";
       g.fillText("SPOT KICK", i * 172 + 20, h / 2 + 1);

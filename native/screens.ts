@@ -1,3 +1,7 @@
+import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
+import { localizedDrawOptions as __l10nDrawOptions } from "./l10n/font.ts";
+// localization-runtime:attached
+import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
 // The browser build's DOM shell (index.html + js/ui.js + css/style.css) as
 // starhermit:ui, built every frame over the stadium: the status bar (mode,
 // score, the Challenge's decision clock), the HUD top (objective, phase, the
@@ -13,7 +17,22 @@
 // the tray a left column, the actions a right column, the goal between). The
 // goal's view rectangle (the canvas area the HUD leaves, as syncSafeInsets
 // measured it) goes to main.ts (view → render.ts).
-import { frame, openMenu } from "starhermit:engine";
+// The browser build's DOM shell (index.html + js/ui.js + css/style.css) as
+// starhermit:ui, built every frame over the stadium: the status bar (mode,
+// score, the Challenge's decision clock), the HUD top (objective, phase, the
+// kick dots), the shot / dive tray (the six-zone grid mirroring the goal, the
+// curve or timing segment, the selection line, Kick! / Dive!) or the wait
+// line, the action buttons (pause, skip, undo in Practice, reset camera), the
+// captions above the tray, named targets over the six goal zones (the old
+// picking's DOM equivalent: screen readers and play scripts find them), the
+// toasts, and every screen and overlay (title, setup, results; pause /
+// settings, help, the session notice). The old media queries are layouts
+// picked by the window's logical size: wide (≥ 560 px: the zone grid beside
+// the segment), portrait (the tray stacked), short landscape (≤ 500 px tall:
+// the tray a left column, the actions a right column, the goal between). The
+// goal's view rectangle (the canvas area the HUD leaves, as syncSafeInsets
+// measured it) goes to main.ts (view → render.ts).
+import { frame } from "starhermit:engine";
 import { bindings, requestRebind } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
@@ -48,7 +67,7 @@ function textWidth(text: string, style: string, kind?: "button" | "heading"): nu
 /** Text up to `width` wide: one label when it fits, else a paragraph. */
 function para(text: string, width: number, cls = "text", id?: string): void {
   if (!text) return;
-  let u = ui.style(cls);
+  let u = ui.style(__l10nStyle(cls));
   if (id) u = u.id(id);
   if (textWidth(text, cls) <= width) u.label(text);
   else u.paragraph(text, Math.max(20, width));
@@ -66,12 +85,12 @@ function button(b: Btn): void {
   if (b.content) opts.content = b.content;
   else if (b.width != null && buttonWidth(b.text, style) > b.width) {
     const inner = b.width - 24; // a label wider than its button wraps (labels don't)
-    opts.content = () => { ui.style(b.disabled ? "wrap-dim" : "wrap").paragraph(b.text, Math.max(20, inner)); };
-  } else if (b.name && b.name !== b.text) opts.content = () => { ui.style("face").label(b.text); };
+    opts.content = () => { ui.style(__l10nStyle(b.disabled ? "wrap-dim" : "wrap")).paragraph(b.text, Math.max(20, inner)); };
+  } else if (b.name && b.name !== b.text) opts.content = () => { ui.style(__l10nStyle("face")).label(b.text); };
   const s: ui.Style = {};
   if (b.width != null) s.width = b.width;
   if (b.height != null) s.height = b.height;
-  if (ui.style(style, s).id(b.id).button(b.name ?? b.text, opts) && fresh()) {
+  if (ui.style(__l10nStyle(style), __l10nStyle(s)).id(b.id).button(b.name ?? b.text, opts) && fresh()) {
     later(() => { if (!b.quiet) sound("ui-confirm"); b.act(); });
   }
 }
@@ -138,8 +157,8 @@ function titlePage(wd: number, L: Layout): void {
     {
       id: "btn-journey", text: T("Journey"), name: `${T("Journey")} ${s.journeyDone.length}/${Content.JOURNEY.length}`, act: setupJourney,
       content: () => ui.row("journey-face", () => {
-        ui.style(L.land ? "face-sm" : "face").label(T("Journey"));
-        ui.row("journey-pill", () => ui.style("pill-text").label(`${s.journeyDone.length}/${Content.JOURNEY.length}`), { style: "pill" });
+        ui.style(__l10nStyle(L.land ? "face-sm" : "face")).label(T("Journey"));
+        ui.row("journey-pill", () => ui.style(__l10nStyle("pill-text")).label(`${s.journeyDone.length}/${Content.JOURNEY.length}`), { style: "pill" });
       }, { spacing: 8, align: "center" }),
     },
     { id: "btn-practice", text: T("Practice"), act: setupPractice },
@@ -279,13 +298,13 @@ function hud(L: Layout): void {
   // status bar: mode, score, decision clock (pointer-transparent labels)
   ui.place("status", { anchor: "top-start", x: 0, y: 0 }, () => {
     ui.row("status-row", () => {
-      ui.style("sb").id("sb-mode").label(t.mode || "Spot Kick");
+      ui.style(__l10nStyle("sb")).id("sb-mode").label(t.mode || "Spot Kick");
       ui.spacer();
-      ui.style("sb").id("sb-clock").label(clockText() || " ");
+      ui.style(__l10nStyle("sb")).id("sb-clock").label(clockText() || " ");
     }, { style: "status", width: L.lw, height: 32, align: "center", padding: { start: 12, end: 12 } });
   });
   ui.place("score", { anchor: "top", y: 6 }, () => {
-    ui.style("sb-score").id("sb-score").label(st ? `${st.scoreA} – ${st.scoreB}${st.suddenDeath ? " " + T("(SD)") : ""}` : "0 – 0");
+    ui.style(__l10nStyle("sb-score")).id("sb-score").label(st ? `${st.scoreA} – ${st.scoreB}${st.suddenDeath ? " " + T("(SD)") : ""}` : "0 – 0");
   });
   // HUD top: objective, phase, kick dots
   const tw = Math.min(L.lw - 24, 600);
@@ -296,7 +315,7 @@ function hud(L: Layout): void {
       para(t.phase, tw, "phase", "hud-phase");
       if (st && st.log.length) {
         ui.row("hud-kicks", () => {
-          for (const rec of st.log) ui.style(rec.o === "goal" ? "kick-goal" : rec.o === "saved" ? "kick-saved" : "kick-off").widget("", { role: "none", size: { width: 14, height: 14 } });
+          for (const rec of st.log) ui.style(__l10nStyle(rec.o === "goal" ? "kick-goal" : rec.o === "saved" ? "kick-saved" : "kick-off")).widget("", { role: "none", size: { width: 14, height: 14 } });
         }, { spacing: 6, justify: "center" });
       }
     }, { spacing: 2, width: tw, align: "center" }));
@@ -340,7 +359,7 @@ function actionList(): Btn[] {
   if (canUndo()) list.push({ id: "btn-undo", text: T("Undo"), style: "btn-hud", act: doUndo, quiet: true });
   list.push({ id: "btn-camera", text: "⌂", name: T("Reset camera"), style: "btn-hud", act: resetCamera, quiet: true });
   if (platform.options.leftHanded) list.reverse();
-  return list.map((b) => ({ ...b, content: b.name ? () => { ui.style("face").label(b.text); } : undefined }));
+  return list.map((b) => ({ ...b, content: b.name ? () => { ui.style(__l10nStyle("face")).label(b.text); } : undefined }));
 }
 const ZONES: { dir: string; height: string; glyph: string; name: string }[] = [
   { dir: "left", height: "high", glyph: "↖", name: "Left high" }, { dir: "center", height: "high", glyph: "↑", name: "Center high" },
@@ -363,7 +382,7 @@ function trayPanel(kind: "shoot" | "dive" | "wait", L: Layout, pw: number): ui.R
           const on = !!app.sel.zone && app.sel.zone.dir === z.dir && app.sel.zone.height === z.height;
           button({ id: `zone-${z.dir}-${z.height}`, text: z.glyph, name: T(z.name), style: "btn-zone", width: small ? 44 : 48, height: 44, selected: on,
             act: () => { ui.setFocus(null); pickZone({ dir: z.dir, height: z.height }); }, quiet: true,
-            content: () => { ui.style("face-zone").label(z.glyph); } });
+            content: () => { ui.style(__l10nStyle("face-zone")).label(z.glyph); } });
         }
       }, { spacing: small ? 4 : 6 });
     }, { spacing: small ? 4 : 6 });
@@ -434,7 +453,7 @@ function resultsPage(wd: number, L: Layout): void {
     if (b) {
       const c0 = Math.min(200, iw * 0.5), c1 = (iw - c0) / 2;
       const row = (id: string, cells: string[], cls: string): void => {
-        ui.row(id, () => { cells.forEach((v, i) => ui.row(`${id}-${i}`, () => ui.style(cls).label(v), { width: i ? c1 : c0, justify: i ? "center" : "start" })); }, { width: iw });
+        ui.row(id, () => { cells.forEach((v, i) => ui.row(`${id}-${i}`, () => ui.style(__l10nStyle(cls)).label(v), { width: i ? c1 : c0, justify: i ? "center" : "start" })); }, { width: iw });
       };
       row("res-h", [T("Component"), r.nameA(), r.nameB()], "th");
       const rows: [string, { A: number; B: number }][] = [
@@ -453,7 +472,7 @@ function resultsPage(wd: number, L: Layout): void {
   }, { style: "results-box", spacing: 6, width: bw });
   if (r.achievements.length) {
     ui.column("results-ach", () => {
-      for (const a of r.achievements) ui.row(`ach-${a.key}`, () => ui.style("ach-text").label(`🏆 ${T(a.name)}`), { style: "ach" });
+      for (const a of r.achievements) ui.row(`ach-${a.key}`, () => ui.style(__l10nStyle("ach-text")).label(`🏆 ${T(a.name)}`), { style: "ach" });
     }, { spacing: 6, align: "center" });
   }
   para(r.next(), bw, "center-dim", "results-next");
@@ -486,7 +505,7 @@ function settingsPanel(wd: number, paused: boolean): void {
   section("set-audio", T("Audio"), (iw) => {
     para(T("Volumes, mute, graphics quality, language, larger text, high contrast, reduced motion and vibration are in the StarHermit Options."), iw, "dim", "options-note");
     flow("set-runtime", [
-      { id: "btn-options", text: T("Open Options"), act: () => openMenu() },
+      { id: "btn-options", text: T("Open Options"), act: () => __l10nOptions() },
       { id: "btn-rebind", text: T("Key bindings"), act: () => requestRebind() },
     ], iw, 8, "start");
   });
@@ -526,7 +545,7 @@ function toggleRow(id: string, label: string, on: boolean, wd: number, set: (v: 
         const s = st.scale, box = 22 * s, bx = r.x + (r.width - box) / 2, by = r.y + (r.height - box) / 2;
         draw.roundRect(bx, by, box, box, 4, on ? token("accent") : "#1a2942");
         draw.strokeRoundRect(bx, by, box, box, 4, token("edge"), 2);
-        if (on) draw.text("✓", bx + box / 2, by + 1 * s, { size: 17 * s, color: "#0b1220", align: "center", weight: "bold" });
+        if (on) draw.text("✓", bx + box / 2, by + 1 * s, __l10nDrawOptions({ size: 17 * s, color: "#0b1220", align: "center", weight: "bold" }));
       },
     });
     if (res.activated && fresh()) later(() => { set(!on); sound("ui-confirm"); });
