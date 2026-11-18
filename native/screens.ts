@@ -106,7 +106,7 @@ function toWindow(x: number, y: number, wd: number, h: number): ui.Rect {
 }
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   const f = frame();
   if (app.screen === "play") hud(L);
@@ -591,4 +591,11 @@ function noticePanel(wd: number): void {
   if (!platform.signedIn()) list.push({ id: "btn-notice-signin", text: T("starhermit.signIn"), act: () => { closeOverlay(); signIn(); } });
   list.push({ id: "btn-notice-local", text: T("acct.playLocal"), act: closeOverlay });
   flow("notice-row", list, bw);
+}
+
+export function drawScreens(): void {
+  if (!(app.overlay === "help")) { drawScreensImmediate(); return; }
+  const actions = ["left","right","high","low","confirm","curve_left","curve_right","early","on_time","late","pause","help","undo","camera","skip"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
