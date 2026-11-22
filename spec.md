@@ -3,8 +3,8 @@
 Spot Kick is an alternating penalty-shootout duel under the floodlights: the
 players take turns shooting and keeping goal, choosing a goal zone, a curve and
 a dive timing across a five-kick set with sudden death on ties. It is a
-StarHermit engine **script game** (TypeScript on the host API, engine 1.44.1,
-`engine.minor=44`), played natively by the StarHermit client and in browsers by
+StarHermit engine **script game** (TypeScript on the host API, engine 1.47.0,
+`engine.minor=47`), played natively by the StarHermit client and in browsers by
 the engine's web runtime from one package.
 
 ## Rules (js/rules.js, unchanged from the browser build)
@@ -188,8 +188,12 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.44.1
+## Engine 1.47.0
 
-Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the WebGPU-only StarHermit 1.47.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
+
+Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
+
+Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
