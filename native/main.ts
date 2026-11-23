@@ -1,3 +1,4 @@
+import { showCursor } from "./cursor.ts";
 import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Spot Kick on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
@@ -978,6 +979,7 @@ function applyTheme(): void {
   render.build(t);
 }
 onStart(() => {
+  showCursor();
   setFixedRate(60);
   initStyles();
   platform.initPlatform();
