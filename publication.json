@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T09:42:05.98879+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-26T15:42:27.735818+00:00",
+    "coverArtUpdatedAt": "2026-11-26T22:29:32.950246+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-26T15:42:27.704003+00:00",
+      "deployedAt": "2026-11-26T22:29:32.928459+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.50.0",
+      "engineVersion": "1.51.0",
       "deployWarning": null
     },
     "description": "Alternate between taking penalties and defending the goal, choosing shot placement and timing your saves.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-26T15:42:26.832Z",
-  "sourceCommit": "c9cdea052661d0a406b42fcaeec793d629ab3c73",
-  "bytesReceived": 1852080,
-  "archiveSha256": "ee91fc711cdfd54f738a5cafd660aa4ceb820ef3cc5897aca6ff08715b38ef5a",
+  "publishedAt": "2026-11-26T22:29:33.344Z",
+  "sourceCommit": "becaa2efc39ed27cd5b0985e4080b470c8e81b9e",
+  "bytesReceived": 1852085,
+  "archiveSha256": "b1c02e68992e63fef090250d48df9aa41d513465d8524489b88a1305666ceacb",
   "indexSha256": "5b202a2af6a687e47cdf369359f380a2afac01c59e063852b27a802e94358866",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 1852080,
+    "bytesReceived": 1852085,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.50.0",
+    "engineVersion": "1.51.0",
     "deployWarning": null
   },
   "liveVerification": {
