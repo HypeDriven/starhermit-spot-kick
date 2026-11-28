@@ -36,8 +36,6 @@ export function loadSfx(): void {
       loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
     }
   } catch (e) { console.warn(`sfx manifest: ${String(e)}`); }
-  renderMusic().then((c) => { musicClip = c; }, (e: unknown) => console.warn(`audio: ${String(e)}`));
-  renderAmbience().then((c) => { ambClip = c; }, (e: unknown) => console.warn(`audio: ${String(e)}`));
 }
 
 export function play(ev: Sfx): void {
@@ -91,7 +89,18 @@ export function setTension(on: boolean): void {
 }
 
 /** Each frame: the beds start once the mixer runs and their renders are in. */
+let __bedsStarted = false;
+function startBeds(): void {
+  if (__bedsStarted) return;
+  __bedsStarted = true;
+  void (async () => {
+    renderMusic().then((c) => { musicClip = c; }, (e: unknown) => console.warn(`audio: ${String(e)}`));
+    renderAmbience().then((c) => { ambClip = c; }, (e: unknown) => console.warn(`audio: ${String(e)}`));
+  })();
+}
+
 export function update(): void {
+  startBeds();
   if (context.state !== "running") return;
   if (musicClip && !musicVoice) {
     try { musicVoice = playClip(musicClip, { bus: "music", loop: true, gain: tension ? 1.35 : 1 }); } catch { musicVoice = null; }
